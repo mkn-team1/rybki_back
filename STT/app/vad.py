@@ -22,12 +22,20 @@ class SileroVAD:
         logger.info("Silero VAD loaded successfully")
 
     def has_speech(self, audio: np.ndarray, sample_rate: int = SAMPLE_RATE, threshold: float = 0.5) -> bool:
-        
         audio_float32 = audio.astype(np.float32) / 32768.0
-        
         tensor = torch.from_numpy(audio_float32).to(self.device)
         
-        with torch.no_grad(): 
-            prob = self.model(tensor, sample_rate=sample_rate).item()
+        chunk_size = 512
         
-        return prob > threshold
+        with torch.no_grad():
+            for i in range(0, len(tensor), chunk_size):
+                chunk = tensor[i: i + chunk_size]
+                
+                if len(chunk) < chunk_size:
+                    continue
+                
+                prob = self.model(chunk, sample_rate).item()
+                if prob > threshold:
+                    return True 
+        
+        return False

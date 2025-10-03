@@ -16,16 +16,22 @@ class VoskManager:
             logger.error("Vosk models not found. ru=%s en=%s", ru_path, en_path)
             raise RuntimeError("Vosk models missing")
         
-        self.models = {
+        models = {
             "ru": vosk.Model(ru_path),
             "en": vosk.Model(en_path)
         }
+        
+        self.recognizers = {
+            "ru": vosk.KaldiRecognizer(models["ru"], sr),
+            "en": vosk.KaldiRecognizer(models["en"], sr)
+        }
+        
         self.sr = sr
-        logger.info("Vosk models loaded")
+        logger.info("Vosk models and recognizers loaded")
     
     def transcribe(self, audio: np.ndarray, lang: str) -> str:
-        model = self.models.get(lang, self.models["en"])
-        rec = vosk.KaldiRecognizer(model, SAMPLE_RATE)
+        rec = self.recognizers.get(lang, self.recognizers["en"])
+        
         rec.AcceptWaveform(audio.tobytes())
         result = rec.FinalResult()
         return json.loads(result).get("text", "")
