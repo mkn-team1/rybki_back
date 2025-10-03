@@ -3,4 +3,5 @@ torch==2.8.0
 fastapi==0.118.0
 uvicorn==0.37.0
 websockets==15.0.1
+speechbrain==1.0.3
 vosk==0.3.45
