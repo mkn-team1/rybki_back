@@ -19,18 +19,18 @@ class SpeechBrainLID:
         try:
             waveform = torch.from_numpy(pcm16.astype(np.float32) / 32768.0).unsqueeze(0)
             
-            out_prob, score, index = self.classifier.classify_batch(waveform)
-
-            labels = self.classifier.hparams.label_encoder.decode_torch(index)
-            lang = labels[0] if isinstance(labels, (list, tuple)) else labels
+            prediction = self.classifier.classify_batch(waveform)
+            text_lab = prediction[3]
+            
+            lang = text_lab[0]
             
             return self._normalize_lang_code(str(lang))
         except Exception as e:
-            logger.error(f"Language detection failed: {e}")
-            return "en" 
+            logger.error(f"Language detection failed: {e}", exc_info=True)
+            return "en"  # fallback
         
     def _normalize_lang_code(self, lang: str) -> str:
-        lang = lang.lower().split('-')[0].split('_')[0]
+        lang = lang.lower().split(':')[0].strip()
         
         # Supported languages mapping
         if lang in ['ru', 'rus']:
