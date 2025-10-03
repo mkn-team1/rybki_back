@@ -13,6 +13,7 @@ class SpeechBrainLID:
             source="speechbrain/lang-id-voxlingua107-ecapa",
             savedir="pretrained_models/lang-id"
         )
+        self.classifier.hparams.label_encoder.ignore_len()
         logger.info("SpeechBrain LID loaded")
 
     def detect(self, pcm16: np.ndarray, sr: int = SAMPLE_RATE) -> str:
@@ -27,7 +28,7 @@ class SpeechBrainLID:
             return self._normalize_lang_code(str(lang))
         except Exception as e:
             logger.error(f"Language detection failed: {e}", exc_info=True)
-            return "en"  # fallback
+            return "en" 
         
     def _normalize_lang_code(self, lang: str) -> str:
         lang = lang.lower().split(':')[0].strip()

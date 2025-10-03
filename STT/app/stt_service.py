@@ -1,88 +1,105 @@
-import json
 import logging
+import time
+import json
 import numpy as np
 from fastapi import WebSocket, WebSocketDisconnect
 
-from config import SAMPLE_RATE
-from app.vad import SileroVAD
-from app.lid import SpeechBrainLID
-from app.vosk_model import VoskManager
-from app.aggregator import TextAggregator
-from app.backend_sender import BackendSender
+from .vosk_model import VoskManager
+from .lid import SpeechBrainLID
+from .vad import SileroVAD
+from .backend_sender import BackendSender
+from .aggregator import SmartAggregator
 
 logger = logging.getLogger(__name__)
 
 class STTService:
-    def __init__(self, backend_url: str):
-        self.vad = SileroVAD()
-        self.lid = SpeechBrainLID()
+    def __init__(self, backend_sender: BackendSender):
         self.vosk = VoskManager()
-        self.backend_sender = BackendSender(backend_url)
+        self.lid =  SpeechBrainLID()
+        self.vad = SileroVAD()
+        self.backend_sender = backend_sender
         logger.info("STTService initialized")
 
-    def _detect_lang(self, audio: np.ndarray) -> str:
-        try:
-            return self.lid.detect(audio)
-        except Exception:
-            return "en"
+    async def _send_final_text(self, text_chunk: str, metadata: dict):
+        if not text_chunk.strip():
+            return
+        payload = {
+            "type": "final_text",
+            "clientId": metadata.get("clientId"),
+            "eventId": metadata.get("eventId"),
+            "text_chunk": text_chunk
+        }
+        await self.backend_sender.send(payload)
 
     async def handle_ws(self, websocket: WebSocket):
+        session_id = f"session_{time.time()}"
+        logger.info(f"New client connected. Session: {session_id}")
         await websocket.accept()
-        session = str(id(websocket))
-        logger.info("Client connected %s", session)
 
         client_meta = {"clientId": None, "eventId": None}
+        aggregator = SmartAggregator(self._send_final_text)
+        
         pcm_buffer = bytearray()
-
-        async def send_batch_to_backend(text_chunk, metadata):
-            payload = {
-                "type": "final_text",
-                "clientId": metadata.get("clientId"),
-                "eventId": metadata.get("eventId"),
-                "text_chunk": text_chunk
-            }
-            await self.backend_sender.send(payload)
-
-        aggregator = TextAggregator(send_batch_to_backend)
+        is_speaking = False
+        silence_start_time = None
+        MIN_SILENCE_DURATION_MS = 700
 
         try:
             while True:
                 msg = await websocket.receive()
 
-                if msg.get("type") == "websocket.receive" and "bytes" in msg:
+                if "bytes" in msg:
                     chunk = msg["bytes"]
                     pcm_buffer.extend(chunk)
+                    
+                    speech_detected = self.vad.has_speech(np.frombuffer(chunk, dtype=np.int16))
 
-                    arr = np.frombuffer(pcm_buffer, dtype=np.int16)
-                    if len(arr) < SAMPLE_RATE * 0.3:
-                        continue
+                    if speech_detected:
+                        is_speaking = True
+                        silence_start_time = None
+                    
+                    if not speech_detected and is_speaking:
+                        if silence_start_time is None:
+                            silence_start_time = time.time()
+                        
+                        if (time.time() - silence_start_time) * 1000 > MIN_SILENCE_DURATION_MS:
+                            logger.info(f"[{session_id}] End of phrase detected by VAD.")
+                            
+                            audio_data = np.frombuffer(pcm_buffer, dtype=np.int16)
+                            lang = self.lid.detect(audio_data)
+                            text = self.vosk.transcribe(audio_data, lang)
+                            
+                            logger.info(f"[{session_id}] Recognized: lang='{lang}', text='{text}'")
+                            
+                            await aggregator.add(text, lang, client_meta, is_final=True)
+                            
+                            pcm_buffer = bytearray()
+                            is_speaking = False
+                            silence_start_time = None
 
-                    if not self.vad.has_speech(arr):
-                        pcm_buffer = bytearray()
-                        continue
-
-                    lang = self._detect_lang(arr)
-                    text = self.vosk.transcribe(arr, lang=lang)
-                    pcm_buffer = bytearray()
-
-                    await aggregator.add(text, client_meta)
-
-                elif msg.get("type") == "websocket.receive" and "text" in msg:
+                elif "text" in msg:
                     obj = json.loads(msg["text"])
-                    t = obj.get("type")
-                    if t == "start":
+                    msg_type = obj.get("type")
+
+                    if msg_type == "start":
                         client_meta["clientId"] = obj.get("clientId")
                         client_meta["eventId"] = obj.get("eventId")
-                        logger.info("Session started client=%s event=%s",
-                                    client_meta["clientId"],
-                                    client_meta["eventId"])
-                    elif t == "end":
-                        await aggregator.flush(client_meta)
-                        logger.info("Session ended client=%s event=%s",
-                                    client_meta["clientId"],
-                                    client_meta["eventId"])
+                        logger.info(f"[{session_id}] Session started client={client_meta['clientId']} event={client_meta['eventId']}")
+                    
+                    elif msg_type == "end":
+                        logger.info(f"[{session_id}] 'end' message received.")
+                        if pcm_buffer:
+                            audio_data = np.frombuffer(pcm_buffer, dtype=np.int16)
+                            lang = self.lid.detect(audio_data)
+                            text = self.vosk.transcribe(audio_data, lang)
+                            await aggregator.add(text, lang, client_meta, is_final=True)
+                        
+                        await aggregator.flush_all(client_meta)
+                        logger.info(f"[{session_id}] Session ended for client={client_meta['clientId']}")
+                        break
 
         except WebSocketDisconnect:
-            logger.info("Client disconnected %s", session)
+            logger.info(f"[{session_id}] Client disconnected.")
         finally:
-            await aggregator.flush(client_meta)
+            await aggregator.flush_all(client_meta)
+            logger.info(f"[{session_id}] Cleanup complete.")
