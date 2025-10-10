@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import logging
 from typing import Optional
-from config import SAMPLE_RATE
+from config import SAMPLE_RATE, SILENCE_AFTER_S
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,12 @@ class SileroVAD:
         self.model.eval()
         logger.info("Silero VAD loaded successfully")
 
-    def has_speech(self, audio: np.ndarray, sample_rate: int = SAMPLE_RATE, threshold: float = 0.5) -> bool:
-        audio_float32 = audio.astype(np.float32) / 32768.0
+    def has_speech(self, pcm16: bytes, sample_rate: int = SAMPLE_RATE, threshold: float = SILENCE_AFTER_S) -> bool:
+        audio_float32 = np.frombuffer(pcm16, dtype=np.int16).astype(np.float32) / 32768.0
         tensor = torch.from_numpy(audio_float32).to(self.device)
         
         chunk_size = 512
+        max_prob = 0.0
         
         with torch.no_grad():
             for i in range(0, len(tensor), chunk_size):
@@ -35,7 +36,10 @@ class SileroVAD:
                     continue
                 
                 prob = self.model(chunk, sample_rate).item()
+                max_prob = max(max_prob, prob)
                 if prob > threshold:
-                    return True 
+                    logger.debug("VAD: speech detected (prob=%.3f > %.3f)", prob, threshold)
+                    return True
         
+        logger.debug("VAD: no speech (max_prob=%.3f <= %.3f)", max_prob, threshold)
         return False

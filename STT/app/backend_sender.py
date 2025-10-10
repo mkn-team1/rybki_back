@@ -11,6 +11,9 @@ class BackendSender:
     def __init__(self, backend_url: str):
         self.url = backend_url
         self.ws: Optional[websockets.legacy.client.WebSocketClientProtocol] = None
+
+    async def start(self):
+        """Запуск фонового reconnect-loop после старта event loop"""
         asyncio.create_task(self._reconnect_loop())
 
     async def _reconnect_loop(self):

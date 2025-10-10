@@ -5,3 +5,5 @@ uvicorn==0.37.0
 websockets==15.0.1
 speechbrain==1.0.3
 vosk==0.3.45
+faster-whisper==1.2.0
+asyncio==4.0.0

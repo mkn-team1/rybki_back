@@ -3,6 +3,7 @@ import json
 import logging
 import numpy as np
 import vosk
+from app.lid import SpeechBrainLID
 from config import VOSK_MODEL_RU, VOSK_MODEL_EN, SAMPLE_RATE
 
 logger = logging.getLogger(__name__)
@@ -27,11 +28,18 @@ class VoskManager:
         }
         
         self.sr = sr
+        self.LID = SpeechBrainLID()
         logger.info("Vosk models and recognizers loaded")
     
-    def transcribe(self, audio: np.ndarray, lang: str) -> str:
+    def transcribe(self, audio: bytes) -> str:
+        
+        logger.debug("Vosk transcribe called")
+        arr = np.frombuffer(audio, dtype=np.int16)
+        lang = self.LID.detect(arr)
+
         rec = self.recognizers.get(lang, self.recognizers["en"])
         
-        rec.AcceptWaveform(audio.tobytes())
+        rec.AcceptWaveform(arr.tobytes())
         result = rec.FinalResult()
-        return json.loads(result).get("text", "")
+        logger.debug("Vosk transcription result: %s", result)
+        return json.loads(result)

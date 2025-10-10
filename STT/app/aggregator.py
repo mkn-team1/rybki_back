@@ -1,51 +1,42 @@
-import logging
-from config import CHAR_THRESHOLD
-from typing import Callable, Awaitable, Dict
+import asyncio, time, logging
 
+from config import CHAR_THRESHOLD, TIME_THRESHOLD
 logger = logging.getLogger(__name__)
 
-class SmartAggregator:
-    def __init__(self, send_callback: Callable[[str, Dict], Awaitable[None]], max_chars: int = CHAR_THRESHOLD):
-        self.send_callback = send_callback
-        self.max_chars = max_chars
-        self.buffers: Dict[str, list[str]] = {}
-        self.current_lang = None
+class TextAggregator:
+    def __init__(self, send_cb, char_threshold=CHAR_THRESHOLD, time_threshold=TIME_THRESHOLD):
+        self.buffer = []
+        self.send_cb = send_cb
+        self.char_threshold = char_threshold
+        self.time_threshold = time_threshold
+        self.last_send = time.time()
 
-    async def add(self, text: str, lang: str, metadata: dict, is_final: bool):
-        if not text:
+    async def add(self, text: str, metadata: dict):
+        if text:
+            self.buffer.append(text)
+            logger.debug("Aggregator: added text '%s' (buffer count: %d)", text, len(self.buffer))
+        now = time.time()
+        total = sum(len(s) for s in self.buffer)
+        time_since_last = now - self.last_send
+        
+        if total >= self.char_threshold:
+            logger.debug("Char threshold reached (%d >= %d) -> flushing", total, self.char_threshold)
+            await self.flush(metadata)
+        elif time_since_last >= self.time_threshold:
+            logger.debug("Time threshold reached (%.1fs >= %.1fs) -> flushing",
+                        time_since_last, self.time_threshold)
+            await self.flush(metadata)
+
+    async def flush(self, metadata: dict):
+        if not self.buffer:
+            logger.debug("Flush called but buffer is empty")
+            self.last_send = time.time()
             return
-
-        if self.current_lang and self.current_lang != lang:
-            await self.flush(self.current_lang, metadata)
-
-        self.current_lang = lang
-
-        if lang not in self.buffers:
-            self.buffers[lang] = []
-
-        if is_final or not self.buffers[lang]:
-             self.buffers[lang].append(text)
-        else:
-             self.buffers[lang][-1] = text 
-
-        total = " ".join(self.buffers[lang])
-        if len(total) >= self.max_chars:
-            await self.flush(lang, metadata)
-
-    async def flush(self, lang: str, metadata: dict):
-        if lang not in self.buffers or not self.buffers[lang]:
-            return
-
-        text_to_send = " ".join(self.buffers[lang])
-        logger.info(f"Flushing buffer for lang='{lang}': '{text_to_send}'")
+        chunk = "\n".join(self.buffer)
+        logger.debug("Flushing %d text segments: '%s'", len(self.buffer), chunk)
+        self.buffer = []
+        self.last_send = time.time()
         
-        await self.send_callback(text_to_send, metadata)
-        
-        self.buffers[lang] = []
-        
-        if self.current_lang == lang:
-            self.current_lang = None
-
-    async def flush_all(self, metadata: dict):
-        for lang in list(self.buffers.keys()):
-            await self.flush(lang, metadata)
+        logger.debug("Sending to backend...")
+        await self.send_cb(chunk, metadata)
+        logger.debug("Sent to backend successfully")
