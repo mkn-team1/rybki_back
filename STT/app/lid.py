@@ -1,8 +1,9 @@
 import numpy as np
 import logging
 import torch
+import os
 from speechbrain.inference.speaker import EncoderClassifier
-from config import SAMPLE_RATE
+from config import SAMPLE_RATE, BASE_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,7 @@ class SpeechBrainLID:
         logger.info("Loading SpeechBrain LID (may take time)...")
         self.classifier = EncoderClassifier.from_hparams(
             source="speechbrain/lang-id-voxlingua107-ecapa",
-            savedir="pretrained_models/lang-id"
+            savedir=os.path.join(BASE_DIR, "pretrained_models", "lang-id")
         )
         self.classifier.hparams.label_encoder.ignore_len()
         logger.info("SpeechBrain LID loaded")

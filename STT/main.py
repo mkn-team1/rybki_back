@@ -4,8 +4,6 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from app.stt_service import STTService
-from app.backend_sender import BackendSender
-from test.mock_backend import MockBackendSender
 from config import MODE, BACKEND_WS_URL
 
 logging.basicConfig(
@@ -15,14 +13,20 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+if MODE == "debug":
+    logger.info("🔧 Starting in DEBUG mode - using MockBackendSender")
+else:
+    logger.info("🚀 Starting in DEVELOP mode - connecting to backend at %s", BACKEND_WS_URL)
+
+stt_service = STTService()
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if MODE != "debug":
-        await backend.start()
-        logger.info("Backend reconnect loop started")
+    await stt_service.connect_to_backend()
     yield
 
 app = FastAPI(lifespan=lifespan)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=['*'],
@@ -30,20 +34,6 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],
 )
-
-
-if MODE == "debug":
-    logger.info("🔧 Starting in DEBUG mode - using MockBackendSender")
-    backend = MockBackendSender()
-else:
-    logger.info("🚀 Starting in DEVELOP mode - connecting to backend at %s", BACKEND_WS_URL)
-    backend = BackendSender(BACKEND_WS_URL)
-
-stt_service = STTService(backend=backend)
-
-@app.websocket("/ws/stt")
-async def websocket_endpoint(websocket: WebSocket):
-    await stt_service.handle_ws(websocket)
 
 if __name__ == "__main__":
     uvicorn.run(

@@ -1,82 +1,131 @@
-import json, logging
-from fastapi import WebSocket, WebSocketDisconnect
+import asyncio
+import json
+import base64
+import logging
+import websockets.legacy.client
+from typing import Optional
+from app.audio_buffer import AudioBufferManager
+from app.aggregator import TextAggregator
 from app.vad import SileroVAD
 from app.vosk_model import VoskManager
 from app.whisper_model import WhisperManager
-from app.aggregator import TextAggregator
-from app.audio_buffer import AudioBufferManager
-from config import MODEL
+from config import MODEL, BACKEND_WS_URL
 
 logger = logging.getLogger(__name__)
 
+
 class STTService:
-    def __init__(self, backend=None):
+    def __init__(self):
         self.vad = SileroVAD()
-        self.model = VoskManager() if MODEL == "Vosk" else WhisperManager()
-        self.backend = backend
+        self.model = WhisperManager() if MODEL == "Whisper" else VoskManager()
+        self.sessions = {}  # key: (clientId, eventId)
+        self.backend_ws: Optional[websockets.legacy.client.WebSocketClientProtocol] = None
 
-    async def handle_ws(self, websocket: WebSocket):
-        await websocket.accept()
-        session = str(id(websocket))
-        logger.debug("client connected %s", session)
+    async def connect_to_backend(self):
+        while True:
+            try:
+                logger.info(f"Connecting to backend WS at {BACKEND_WS_URL}")
+                async with websockets.connect(BACKEND_WS_URL) as ws:
+                    self.backend_ws = ws
+                    logger.info("Connected to backend successfully")
 
-        client_meta = {"clientId": None, "eventId": None}
-        audio_buffer = AudioBufferManager(self.vad)
+                    await self.listen_loop(ws)
+            except Exception as e:
+                logger.error(f"Lost connection to backend: {e}, reconnecting in 3s")
+                await asyncio.sleep(3)
 
-        async def send_batch(text_chunk, metadata):
-            payload = {
-                "type": "final_text",
-                "clientId": metadata.get("clientId"),
-                "eventId": metadata.get("eventId"),
-                "text": text_chunk,
-            }
-            await self.backend.send(payload)
+    async def listen_loop(self, ws):
+        '''
+        message = {
+            "clientId": "...",
+            "eventId": "...",
+            "audio": "<base64 PCM16 chunk>"
+        }
+        '''
+        async for message in ws:
+            try:
+                data = json.loads(message)
+                msg_type = data.get("type", "audio")
+                client_id = data.get("clientId")
+                event_id = data.get("eventId")
 
-        aggregator = TextAggregator(send_batch)
+                if not (client_id and event_id):
+                    logger.warning("Received message without clientId/eventId: %s", data)
+                    continue
+
+                key = (client_id, event_id)
+
+                if msg_type == "audio":
+                    audio_b64 = data.get("audio")
+                    if not audio_b64:
+                        logger.warning("Audio message missing 'audio' field")
+                        continue
+
+                    audio_bytes = base64.b64decode(audio_b64)
+
+                    if key not in self.sessions:
+                        self.sessions[key] = {
+                            "audio_buffer": AudioBufferManager(self.vad),
+                            "aggregator": TextAggregator(lambda text, meta: self.send_to_backend(text, meta)),
+                            "meta": {"clientId": client_id, "eventId": event_id}
+                        }
+
+                    session = self.sessions[key]
+                    buf: AudioBufferManager = session["audio_buffer"]
+                    agg: TextAggregator = session["aggregator"]
+
+                    buf.append(audio_bytes)
+                    if buf.should_transcribe():
+                        pcm = buf.pop_chunk()
+                        result = self.model.transcribe(pcm)
+                        text = result.get("text", "").strip()
+                        if text:
+                            await agg.add(text, session["meta"])
+
+                elif msg_type in ("disconnect", "end"):
+                    logger.debug(f"Client {client_id}/{event_id} disconnected -> cleaning up")
+                    await self._cleanup_session(key)
+
+            except Exception as e:
+                logger.exception("Error processing WS message: %s", e)
+
+
+    async def _cleanup_session(self, key):
+        session = self.sessions.pop(key, None)
+        if not session:
+            return
+        try:
+            buf: AudioBufferManager = session["audio_buffer"]
+            agg: TextAggregator = session["aggregator"]
+            pcm = buf.pop_chunk()
+            if pcm:
+                res = self.model.transcribe(pcm)
+                text = res.get("text", "").strip()
+                if text:
+                    await agg.add(text, session["meta"])
+            await agg.flush(session["meta"])
+            logger.debug("Session %s cleaned up successfully", key)
+        except Exception as e:
+            logger.error("Error during cleanup of %s: %s", key, e)
+
+
+    async def send_to_backend(self, text: str, metadata: dict):
+        payload = {
+            "type": "final_text",
+            "clientId": metadata["clientId"],
+            "eventId": metadata["eventId"],
+            "text": text,
+        }
+        if not self.backend_ws:
+            logger.warning("Backend WS not connected, skipping send")
+            return
 
         try:
-            while True:
-                try:
-                    msg = await websocket.receive()
-
-                    if msg.get("type") == "websocket.disconnect":
-                        logger.debug("client disconnected %s (disconnect message)", session)
-                        break
-                except WebSocketDisconnect:
-                    logger.debug("client disconnected %s", session)
-                    break
-                except RuntimeError as e:
-                    logger.debug("websocket receive runtime error (treat as disconnect): %s", e)
-                    break
-
-                if msg.get("type") == "websocket.receive" and "bytes" in msg:
-                    chunk = msg["bytes"]
-                    audio_buffer.append(chunk)
-
-                    if audio_buffer.should_transcribe():
-                        pcm_data = audio_buffer.pop_chunk()
-                        res = self.model.transcribe(pcm_data)
-                        text = res.get("text", "").strip()
-                        if text:
-                            await aggregator.add(text, client_meta)
-
-                elif msg.get("type") == "websocket.receive" and "text" in msg:
-                    obj = json.loads(msg["text"])
-                    if obj.get("type") == "start":
-                        client_meta["clientId"] = obj.get("clientId")
-                        client_meta["eventId"] = obj.get("eventId")
-                        logger.debug("session start %s/%s", client_meta["clientId"], client_meta["eventId"])
-                    elif obj.get("type") == "end":
-                        await aggregator.flush(client_meta)
-                        logger.debug("session end %s/%s", client_meta["clientId"], client_meta["eventId"])
-
+            await self.backend_ws.send(json.dumps(payload, ensure_ascii=False))
+            logger.debug("Sent transcription to backend: %s", payload)
+        except AttributeError:
+            logger.error("Backend WS object doesn't support send(), dropping connection reference")
+            self.backend_ws = None
         except Exception as e:
-            logger.error("Error in session %s: %s", session, e)
-        finally:
-            pcm_data = audio_buffer.pop_chunk()
-            res = self.model.transcribe(pcm_data)
-            text = res.get("text", "").strip()
-            if text:
-                await aggregator.add(text, client_meta)
-            await aggregator.flush(client_meta)
-
+            logger.error("Failed to send to backend: %s", e)
+            self.backend_ws = None
