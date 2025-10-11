@@ -4,6 +4,8 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.rybki.spring_boot.model.dto.GigaChatTokenDto;
+import com.rybki.spring_boot.util.LoggerFactoryService;
+import com.rybki.spring_boot.util.LoggerService;
 import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -16,6 +18,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 @Service
 public class GigaChatAuthService {
+
+    private static final LoggerService log = LoggerFactoryService.getLogger(GigaChatAuthService.class);
 
     private final WebClient webClient = WebClient.builder().build();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
@@ -36,7 +40,7 @@ public class GigaChatAuthService {
 
     @Scheduled(fixedRate = 1800000) // 30 минут = 1800000 миллисекунд
     public void refreshToken() {
-        
+
         try {
             MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
             formData.add("scope", "GIGACHAT_API_PERS");
@@ -61,11 +65,11 @@ public class GigaChatAuthService {
                     lock.writeLock().unlock();
                 }
             } else {
-                
+                log.warn("Failed to retrieve access token");
             }
 
         } catch (Exception e) {
-            
+            log.error("Failed to refresh access token", e);
         }
     }
 
@@ -77,13 +81,13 @@ public class GigaChatAuthService {
                 refreshToken();
                 lock.readLock().lock();
             }
-            
+
             if (tokenExpiresAt != null && System.currentTimeMillis() >= tokenExpiresAt) {
                 lock.readLock().unlock();
                 refreshToken();
                 lock.readLock().lock();
             }
-            
+
             return accessToken;
         } finally {
             lock.readLock().unlock();

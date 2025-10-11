@@ -11,6 +11,8 @@ import com.rybki.spring_boot.model.dto.GigaChatRequestDto;
 import com.rybki.spring_boot.model.dto.GigaChatResponseDto;
 import com.rybki.spring_boot.model.dto.NnResponseDto;
 import com.rybki.spring_boot.service.GigaChatAuthService;
+import com.rybki.spring_boot.util.LoggerFactoryService;
+import com.rybki.spring_boot.util.LoggerService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -18,6 +20,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 @Component
 public class IdeaExtractorClient {
+
+    private static final LoggerService log = LoggerFactoryService.getLogger(IdeaExtractorClient.class);
 
     private final WebClient webClient;
     private final GigaChatAuthService authService;
@@ -57,9 +61,9 @@ public class IdeaExtractorClient {
             }
 
             String content = response.choices().get(0).message().content();
-            
+
             String jsonContent = extractJsonFromMarkdown(content);
-            
+
             NnResponseDto nnResponse = objectMapper.readValue(jsonContent, NnResponseDto.class);
 
             if ("no_ideas_found".equalsIgnoreCase(nnResponse.status())) {
@@ -67,6 +71,7 @@ public class IdeaExtractorClient {
             }
 
             if (nnResponse.ideas() == null || nnResponse.ideas().isEmpty()) {
+                log.warn("nnResponse status is success but no ideas found");
                 return Collections.emptyList();
             }
 
@@ -79,8 +84,10 @@ public class IdeaExtractorClient {
                 .toList();
 
         } catch (JsonProcessingException e) {
+            log.error("Failed to process JSON", e);
             return Collections.emptyList();
         } catch (Exception e) {
+            log.error("Failed to extract ideas", e);
             return Collections.emptyList();
         }
     }

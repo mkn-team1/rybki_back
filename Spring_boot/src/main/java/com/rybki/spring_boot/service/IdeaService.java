@@ -4,10 +4,14 @@ import java.util.List;
 
 import com.rybki.spring_boot.client.IdeaExtractorClient;
 import com.rybki.spring_boot.model.domain.Idea;
+import com.rybki.spring_boot.util.LoggerFactoryService;
+import com.rybki.spring_boot.util.LoggerService;
 import org.springframework.stereotype.Service;
 
 @Service
 public class IdeaService {
+
+    private static final LoggerService log = LoggerFactoryService.getLogger(IdeaService.class);
 
     private final IdeaExtractorClient ideaExtractorClient;
     private final SessionService sessionService;
@@ -19,7 +23,6 @@ public class IdeaService {
 
     public void processText(String clientId, String eventId, String text) {
         try {
-            
             List<Idea> ideas = ideaExtractorClient.extractIdeas(text);
             if (ideas == null || ideas.isEmpty()) {
                 return;
@@ -31,6 +34,7 @@ public class IdeaService {
             }
 
         } catch (Exception e) {
+            log.error("Failed to process text for clientId={}, eventId={}", clientId, eventId, e);
         }
     }
 }
