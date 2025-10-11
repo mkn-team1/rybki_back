@@ -4,22 +4,17 @@ import java.util.List;
 
 import com.rybki.spring_boot.client.IdeaExtractorClient;
 import com.rybki.spring_boot.model.domain.Idea;
-import com.rybki.spring_boot.util.LoggerFactoryService;
-import com.rybki.spring_boot.util.LoggerService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class IdeaService {
-
-    private static final LoggerService log = LoggerFactoryService.getLogger(IdeaService.class);
 
     private final IdeaExtractorClient ideaExtractorClient;
     private final SessionService sessionService;
-
-    public IdeaService(IdeaExtractorClient ideaExtractorClient, SessionService sessionService) {
-        this.ideaExtractorClient = ideaExtractorClient;
-        this.sessionService = sessionService;
-    }
 
     public void processText(String clientId, String eventId, String text) {
         try {

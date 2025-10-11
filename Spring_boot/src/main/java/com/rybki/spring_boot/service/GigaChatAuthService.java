@@ -4,9 +4,9 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import com.rybki.spring_boot.model.dto.GigaChatTokenDto;
-import com.rybki.spring_boot.util.LoggerFactoryService;
-import com.rybki.spring_boot.util.LoggerService;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,9 +17,9 @@ import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Service
+@RequiredArgsConstructor
+@Slf4j
 public class GigaChatAuthService {
-
-    private static final LoggerService log = LoggerFactoryService.getLogger(GigaChatAuthService.class);
 
     private final WebClient webClient = WebClient.builder().build();
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();

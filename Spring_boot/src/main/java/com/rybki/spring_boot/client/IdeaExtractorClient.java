@@ -11,30 +11,25 @@ import com.rybki.spring_boot.model.dto.GigaChatRequestDto;
 import com.rybki.spring_boot.model.dto.GigaChatResponseDto;
 import com.rybki.spring_boot.model.dto.NnResponseDto;
 import com.rybki.spring_boot.service.GigaChatAuthService;
-import com.rybki.spring_boot.util.LoggerFactoryService;
-import com.rybki.spring_boot.util.LoggerService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 @Component
+@RequiredArgsConstructor
+@Slf4j
 public class IdeaExtractorClient {
 
-    private static final LoggerService log = LoggerFactoryService.getLogger(IdeaExtractorClient.class);
-
-    private final WebClient webClient;
+    private final WebClient webClient = WebClient.builder().build();
+    ;
     private final GigaChatAuthService authService;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${gigachat.api.url}")
     private String apiUrl;
-
-    public IdeaExtractorClient(GigaChatAuthService authService) {
-        this.webClient = WebClient.builder().build();
-        this.objectMapper = new ObjectMapper();
-        this.authService = authService;
-    }
 
     public List<Idea> extractIdeas(String text) {
         try {
