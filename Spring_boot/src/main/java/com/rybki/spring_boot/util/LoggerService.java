@@ -1,4 +1,4 @@
-package com.rybki.spring_boot.service;
+package com.rybki.spring_boot.util;
 
 import org.slf4j.Logger;
 
@@ -16,31 +16,25 @@ import org.slf4j.Logger;
  *
  */
 
-public class LoggerService {
+public record LoggerService(Logger logger) {
 
-    private final Logger logger;
-
-    public LoggerService(Logger logger) {
-        this.logger = logger;
-    }
-
-    public void info(String msg, Object... args) {
+    public void info(final String msg, final Object... args) {
         logger.info(msg, args);
     }
 
-    public void debug(String msg, Object... args) {
+    public void debug(final String msg, final Object... args) {
         logger.debug(msg, args);
     }
 
-    public void warn(String msg, Object... args) {
+    public void warn(final String msg, final Object... args) {
         logger.warn(msg, args);
     }
 
-    public void error(String msg, Object... args) {
+    public void error(final String msg, final Object... args) {
         logger.error(msg, args);
     }
 
-    public void error(String msg, Throwable ex) {
+    public void error(final String msg, final Throwable ex) {
         logger.error(msg, ex);
     }
 }
