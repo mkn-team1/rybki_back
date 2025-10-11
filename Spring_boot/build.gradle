@@ -1,0 +1,56 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.6'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.rybki'
+version = '0.0.1-SNAPSHOT'
+description = 'Spring_boot'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Базовые зависимости Spring Boot (WebFlux, Actuator, Validation)
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'  // Reactive Web
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'  // Метрики и Health Checks
+    implementation 'org.springframework.boot:spring-boot-starter-validation'  // Валидация
+
+    // Jackson для работы с JSON
+    implementation 'com.fasterxml.jackson.core:jackson-databind'  // Основная библиотека для сериализации
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'  // Для работы с LocalDateTime и т.п.
+
+    // Redis для реактивной работы
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'  // Для реактивного Redis
+
+    // Resilience4j для обработки сбоев, повторных попыток и т.п.
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.2.0'  // Spring Boot интеграция
+    implementation 'io.github.resilience4j:resilience4j-reactor:2.2.0'  // Для реактивных потоков
+    implementation 'io.github.resilience4j:resilience4j-annotations:2.2.0'  // Для аннотаций
+
+    // WebSocket для реактивных push-сообщений
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+
+    // Метрики для Prometheus
+    implementation 'io.micrometer:micrometer-registry-prometheus'  // Для интеграции с Prometheus
+
+    // OpenAPI / Swagger UI для документации
+    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.5.0'  // Генерация документации для WebFlux
+
+    // Тестирование: JUnit 5, Mockito, Reactor Test
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'  // Тесты Spring Boot
+    testImplementation 'io.projectreactor:reactor-test'  // Для тестирования реактивных потоков
+}
+
+test {
+    useJUnitPlatform()
+}
