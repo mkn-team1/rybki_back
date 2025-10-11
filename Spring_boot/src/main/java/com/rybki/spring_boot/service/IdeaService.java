@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 public class IdeaService {
 
     private final IdeaExtractorClient ideaExtractorClient;
-    private final SessionService sessionService;
+    private final OutMessageSenderService outMessageSenderService;
 
     public void processText(String clientId, String eventId, String text) {
         try {
@@ -24,8 +24,7 @@ public class IdeaService {
             }
 
             for (Idea idea : ideas) {
-                // TODO: Waiting for sessionService method
-                // sessionService.sendIdeaToClient(clientId, eventId, idea);
+                outMessageSenderService.sendIdeaToClient(clientId, eventId, idea);
             }
 
         } catch (Exception e) {
