@@ -4,8 +4,8 @@ import java.net.URI;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 
+import com.rybki.spring_boot.service.SttResponseHandler;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
@@ -23,14 +23,14 @@ public class SttWebSocketClient {
     private final Duration timeout;
     private final Duration reconnectInitialDelay;
     private final Duration reconnectMaxDelay;
+    private final SttResponseHandler responseHandler;
 
     private final ReactorNettyWebSocketClient client = new ReactorNettyWebSocketClient();
     private final AtomicLong currentBackoffMs = new AtomicLong();
     private final Sinks.Many<String> outQueue = Sinks.many().unicast().onBackpressureBuffer();
+
     private volatile WebSocketSession session;
     private volatile boolean running;
-    @Setter
-    private SttMessageHandler messageHandler;
 
     /**
      * Запуск клиента
@@ -39,6 +39,7 @@ public class SttWebSocketClient {
         if (running) {
             return;
         }
+
         running = true;
         currentBackoffMs.set(reconnectInitialDelay.toMillis());
         connect();
@@ -53,7 +54,7 @@ public class SttWebSocketClient {
         final WebSocketSession s = session;
         if (s != null && s.isOpen()) {
             s.close()
-                .doOnError(e -> log.error("Error closing session", e))
+                .doOnError(e -> log.error("Error closing STT session", e))
                 .subscribe();
         }
     }
@@ -64,14 +65,13 @@ public class SttWebSocketClient {
     public void sendToStt(final String json) {
         final Sinks.EmitResult result = outQueue.tryEmitNext(json);
         if (result.isFailure()) {
-            log.warn("Failed to enqueue message: {}", result);
+            log.warn("Failed to enqueue STT message: {}", result);
         }
     }
 
     /**
      * Подключение к STT с reconnect/backoff
      */
-
     private void connect() {
         if (!running) {
             return;
@@ -79,23 +79,15 @@ public class SttWebSocketClient {
 
         log.info("Connecting to STT at {}", sttUrl);
 
-        client.execute(URI.create(sttUrl), webSocketsession -> {
-                log.info("Connected to STT");
-                this.session = webSocketsession;
+        client.execute(URI.create(sttUrl), ws -> {
+                this.session = ws;
                 currentBackoffMs.set(reconnectInitialDelay.toMillis());
+                log.info("Connected to STT server: {}", sttUrl);
 
-                final Mono<Void> inbound = session.receive()
-                    .map(WebSocketMessage::getPayloadAsText)
-                    .doOnNext(msg -> {
-                        if (messageHandler != null) {
-                            messageHandler.onMessage(msg);
-                        }
-                    })
-                    .then();
-
-                return inbound
+                // Запуск приёма сообщений
+                return startReceiveLoop(ws)
                     .doFinally(sig -> {
-                        log.warn("STT connection closed, scheduling reconnect");
+                        log.warn("STT connection closed ({}) — scheduling reconnect", sig);
                         this.session = null;
                         scheduleReconnect();
                     });
@@ -116,18 +108,36 @@ public class SttWebSocketClient {
         }
 
         final long delay = currentBackoffMs.get();
-        log.info("Reconnecting in {} ms", delay);
+        log.info("Reconnecting to STT in {} ms", delay);
 
         Mono.delay(Duration.ofMillis(delay), Schedulers.boundedElastic())
             .then(Mono.fromRunnable(this::connect))
             .subscribe();
 
-        // увеличиваем backoff для следующей попытки
         currentBackoffMs.updateAndGet(prev -> Math.min(prev * 2, reconnectMaxDelay.toMillis()));
     }
 
     /**
-     * Фоновый loop для отправки сообщений из очереди
+     * Получение сообщений от STT
+     */
+    private Mono<Void> startReceiveLoop(WebSocketSession ws) {
+        return ws.receive()
+            .map(WebSocketMessage::getPayloadAsText)
+            .doOnNext(msg -> {
+                log.debug("Received from STT: {}", msg);
+                try {
+                    responseHandler.handle(msg);
+                } catch (Exception e) {
+                    log.error("Error while handling STT message", e);
+                }
+            })
+            .onErrorContinue((err, obj) ->
+                log.error("Error receiving message from STT", err))
+            .then();
+    }
+
+    /**
+     * Отправка сообщений из очереди
      */
     private void startSenderLoop() {
         outQueue.asFlux()
@@ -136,18 +146,15 @@ public class SttWebSocketClient {
                 if (s != null && s.isOpen()) {
                     return s.send(Mono.just(s.textMessage(msg)))
                         .timeout(timeout)
-                        .doOnError(e -> log.warn("Failed to send message to STT", e))
-                        .onErrorResume(e -> Mono.empty());
+                        .onErrorResume(e -> {
+                            log.warn("Failed to send message to STT", e);
+                            return Mono.empty();
+                        });
                 } else {
-                    log.warn("STT session not ready, dropping message");
+                    log.warn("STT session not ready — message dropped");
                     return Mono.empty();
                 }
-            }, 1) // concurrency = 1, сохраняем порядок
+            }, 1) // concurrency = 1 → порядок сохранён
             .subscribe();
-    }
-
-    public interface SttMessageHandler {
-
-        void onMessage(String json);
     }
 }

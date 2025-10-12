@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 public class SttResponseHandler {
 
     private final IdeaService ideaService;
-    private final ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * Обрабатываем сообщение от STT

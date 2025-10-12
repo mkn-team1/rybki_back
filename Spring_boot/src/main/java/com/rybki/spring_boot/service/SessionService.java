@@ -41,18 +41,6 @@ public class SessionService {
         return Mono.justOrEmpty(sessions.get(session.getId()));
     }
 
-    // Получить clientId по сессии
-    public Mono<String> getClientIdBySession(final WebSocketSession session) {
-        ClientSession cs = sessions.get(session.getId());
-        return Mono.justOrEmpty(cs != null ? cs.clientId() : null);
-    }
-
-    // Получить eventId по сессии
-    public Mono<String> getEventIdBySession(final WebSocketSession session) {
-        ClientSession cs = sessions.get(session.getId());
-        return Mono.justOrEmpty(cs != null ? cs.eventId() : null);
-    }
-
     // Получить все сессии для конкретного event
     public Flux<ClientSession> getSessionsForEvent(final String eventId) {
         final List<ClientSession> list = sessions.values().stream()
