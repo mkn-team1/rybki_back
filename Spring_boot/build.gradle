@@ -46,6 +46,10 @@ dependencies {
     // OpenAPI / Swagger UI для документации
     implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.5.0'  // Генерация документации для WebFlux
 
+    // Lombok
+    compileOnly "org.projectlombok:lombok:1.18.42"
+    annotationProcessor "org.projectlombok:lombok:1.18.42"
+
     // Тестирование: JUnit 5, Mockito, Reactor Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'  // Тесты Spring Boot
     testImplementation 'io.projectreactor:reactor-test'  // Для тестирования реактивных потоков
