@@ -3,8 +3,6 @@ import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 MODE = os.getenv("MODE", "develop") # "develop" / "debug"
-
-BACKEND_WS_URL = os.getenv("BACKEND_WS_URL", "ws://localhost:8080/stt-ingest")
 MODEL = os.getenv("MODEL", "Vosk") # "Vosk" / "Whisper"
 
 VOSK_MODEL_RU = os.path.join(BASE_DIR, "models", "vosk-model-small-ru-0.22")

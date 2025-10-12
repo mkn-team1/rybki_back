@@ -11,23 +11,53 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Конфигурация
-STT_WS_URI = "ws://localhost:8001"  # STT сервис подключится сюда как клиент
+STT_WS_URI = "ws://localhost:8001/stt-ingest"  # Backend подключается к STT сервису
 AUDIO_FILE = os.path.join(os.path.dirname(__file__), "out.wav")
 SAMPLE_RATE = 16000
 CHUNK_SIZE = int(SAMPLE_RATE * 0.2)  # Отправляем по 200 мс аудио
 
 class MockBackend:
-    """Мок-бэкенд, который форвардит аудио в STT и получает результаты"""
+    """Мок-бэкенд, который подключается к STT и отправляет аудио"""
     
     def __init__(self):
         self.stt_connection = None
         self.received_results = []
     
-    async def handle_stt_connection(self, websocket):
-        """Обработчик подключения от STT сервиса"""
-        logger.info("✅ STT сервис подключился к мок-бэкенду")
-        self.stt_connection = websocket
+    async def connect_and_send_audio(self, client_id: str, event_id: str, audio_file: str):
+        """Подключается к STT сервису и отправляет аудио"""
         
+        logger.info(f"🔌 Подключаемся к STT сервису: {STT_WS_URI}")
+        
+        try:
+            async with websockets.connect(STT_WS_URI) as websocket:
+                self.stt_connection = websocket
+                logger.info("✅ Успешно подключились к STT сервису")
+                
+                # Запускаем задачу для приёма результатов
+                receive_task = asyncio.create_task(self.receive_results(websocket))
+                
+                # Отправляем аудио
+                await self.send_audio(websocket, client_id, event_id, audio_file)
+                
+                # Ждём немного для получения финальных результатов
+                await asyncio.sleep(2)
+                
+                # Отменяем задачу приёма
+                receive_task.cancel()
+                try:
+                    await receive_task
+                except asyncio.CancelledError:
+                    pass
+                
+        except websockets.exceptions.WebSocketException as e:
+            logger.error(f"❌ Ошибка WebSocket: {e}")
+        except Exception as e:
+            logger.error(f"❌ Произошла ошибка: {e}", exc_info=True)
+        finally:
+            self.stt_connection = None
+    
+    async def receive_results(self, websocket):
+        """Принимает результаты от STT сервиса"""
         try:
             async for message in websocket:
                 try:
@@ -50,23 +80,12 @@ class MockBackend:
                     logger.error(f"Ошибка обработки сообщения от STT: {e}")
                     
         except websockets.exceptions.ConnectionClosed:
-            logger.info("STT сервис отключился")
-        finally:
-            self.stt_connection = None
+            logger.info("Соединение с STT закрыто")
+        except asyncio.CancelledError:
+            logger.debug("Задача приёма результатов отменена")
     
-    async def send_audio_to_stt(self, client_id: str, event_id: str, audio_file: str):
+    async def send_audio(self, websocket, client_id: str, event_id: str, audio_file: str):
         """Отправляет аудио в STT через WebSocket"""
-        
-        # Ждём подключения STT
-        logger.info("⏳ Ожидание подключения STT сервиса...")
-        for _ in range(30):  # Ждём до 30 секунд
-            if self.stt_connection:
-                break
-            await asyncio.sleep(1)
-        
-        if not self.stt_connection:
-            logger.error("❌ STT сервис не подключился за 30 секунд")
-            return
         
         logger.info("📤 Начинаем отправку аудио в STT...")
         
@@ -122,44 +141,36 @@ class MockBackend:
 
 
 async def run_test():
-    """Запускает мок-бэкенд и отправляет тестовое аудио"""
+    """Запускает мок-бэкенд, подключается к STT и отправляет тестовое аудио"""
     
     backend = MockBackend()
     
-    # Запускаем WebSocket сервер для приёма подключения от STT
-    logger.info("🚀 Запуск мок-бэкенда на ws://localhost:8080/stt-ingest")
+    logger.info("🚀 Запуск тестового клиента")
+    logger.info("💡 Убедитесь, что STT сервис запущен на ws://localhost:8001/stt-ingest")
+    logger.info("-" * 60)
     
-    async with websockets.serve(backend.handle_stt_connection, "localhost", 8080):
-        logger.info("✅ Мок-бэкенд запущен и ожидает подключения STT сервиса")
-        logger.info("💡 Убедитесь, что STT сервис запущен и подключается к ws://localhost:8080/stt-ingest")
-        logger.info("-" * 60)
-        
-        # Отправляем тестовое аудио
-        await backend.send_audio_to_stt(
-            client_id="test_client_123",
-            event_id="test_event_456",
-            audio_file=AUDIO_FILE
-        )
-        
-        # Показываем итоги
-        logger.info("=" * 60)
-        logger.info(f"📊 Тест завершён. Получено результатов: {len(backend.received_results)}")
-        
-        if backend.received_results:
-            logger.info("\n📝 Все полученные результаты:")
-            for idx, result in enumerate(backend.received_results, 1):
-                logger.info(f"\n  Результат #{idx}:")
-                logger.info(f"    ClientId: {result.get('clientId')}")
-                logger.info(f"    EventId: {result.get('eventId')}")
-                logger.info(f"    Text: {result.get('text')}")
-        else:
-            logger.warning("⚠️  Результаты не получены. Проверьте логи STT сервиса.")
-        
-        logger.info("=" * 60)
-        logger.info("🛑 Нажмите Ctrl+C для остановки мок-бэкенда")
-        
-        # Держим сервер запущенным
-        await asyncio.Future()  # Бесконечное ожидание
+    # Подключаемся к STT и отправляем аудио
+    await backend.connect_and_send_audio(
+        client_id="test_client_123",
+        event_id="test_event_456",
+        audio_file=AUDIO_FILE
+    )
+    
+    # Показываем итоги
+    logger.info("=" * 60)
+    logger.info(f"📊 Тест завершён. Получено результатов: {len(backend.received_results)}")
+    
+    if backend.received_results:
+        logger.info("\n📝 Все полученные результаты:")
+        for idx, result in enumerate(backend.received_results, 1):
+            logger.info(f"\n  Результат #{idx}:")
+            logger.info(f"    ClientId: {result.get('clientId')}")
+            logger.info(f"    EventId: {result.get('eventId')}")
+            logger.info(f"    Text: {result.get('text')}")
+    else:
+        logger.warning("⚠️  Результаты не получены. Проверьте логи STT сервиса.")
+    
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":
