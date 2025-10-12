@@ -1,5 +1,9 @@
 package com.rybki.spring_boot.websocket;
 
+import java.net.URI;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicLong;
+
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -10,9 +14,6 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 
-import java.net.URI;
-import java.time.Duration;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -25,30 +26,31 @@ public class SttWebSocketClient {
 
     private final ReactorNettyWebSocketClient client = new ReactorNettyWebSocketClient();
     private final AtomicLong currentBackoffMs = new AtomicLong();
-
+    private final Sinks.Many<String> outQueue = Sinks.many().unicast().onBackpressureBuffer();
     private volatile WebSocketSession session;
-    private volatile boolean running = false;
-
+    private volatile boolean running;
     @Setter
     private SttMessageHandler messageHandler;
 
-    public interface SttMessageHandler {
-        void onMessage(String json);
-    }
-
-    /** Запуск клиента */
+    /**
+     * Запуск клиента
+     */
     public void start() {
-        if (running) return;
+        if (running) {
+            return;
+        }
         running = true;
         currentBackoffMs.set(reconnectInitialDelay.toMillis());
         connect();
         startSenderLoop();
     }
 
-    /** Остановка клиента */
+    /**
+     * Остановка клиента
+     */
     public void stop() {
         running = false;
-        WebSocketSession s = session;
+        final WebSocketSession s = session;
         if (s != null && s.isOpen()) {
             s.close()
                 .doOnError(e -> log.error("Error closing session", e))
@@ -56,28 +58,33 @@ public class SttWebSocketClient {
         }
     }
 
-    private final Sinks.Many<String> outQueue = Sinks.many().unicast().onBackpressureBuffer();
-
-    /** Отправка JSON в STT */
-    public void sendToStt(String json) {
-        Sinks.EmitResult result = outQueue.tryEmitNext(json);
+    /**
+     * Отправка JSON в STT
+     */
+    public void sendToStt(final String json) {
+        final Sinks.EmitResult result = outQueue.tryEmitNext(json);
         if (result.isFailure()) {
             log.warn("Failed to enqueue message: {}", result);
         }
     }
 
-    /** Подключение к STT с reconnect/backoff */
+    /**
+     * Подключение к STT с reconnect/backoff
+     */
+
     private void connect() {
-        if (!running) return;
+        if (!running) {
+            return;
+        }
 
         log.info("Connecting to STT at {}", sttUrl);
 
-        client.execute(URI.create(sttUrl), session -> {
+        client.execute(URI.create(sttUrl), webSocketsession -> {
                 log.info("Connected to STT");
-                this.session = session;
+                this.session = webSocketsession;
                 currentBackoffMs.set(reconnectInitialDelay.toMillis());
 
-                Mono<Void> inbound = session.receive()
+                final Mono<Void> inbound = session.receive()
                     .map(WebSocketMessage::getPayloadAsText)
                     .doOnNext(msg -> {
                         if (messageHandler != null) {
@@ -100,11 +107,15 @@ public class SttWebSocketClient {
             .subscribe();
     }
 
-    /** Экспоненциальный backoff reconnect */
+    /**
+     * Экспоненциальный backoff reconnect
+     */
     private void scheduleReconnect() {
-        if (!running) return;
+        if (!running) {
+            return;
+        }
 
-        long delay = currentBackoffMs.get();
+        final long delay = currentBackoffMs.get();
         log.info("Reconnecting in {} ms", delay);
 
         Mono.delay(Duration.ofMillis(delay), Schedulers.boundedElastic())
@@ -115,11 +126,13 @@ public class SttWebSocketClient {
         currentBackoffMs.updateAndGet(prev -> Math.min(prev * 2, reconnectMaxDelay.toMillis()));
     }
 
-    /** Фоновый loop для отправки сообщений из очереди */
+    /**
+     * Фоновый loop для отправки сообщений из очереди
+     */
     private void startSenderLoop() {
         outQueue.asFlux()
             .flatMap(msg -> {
-                WebSocketSession s = session;
+                final WebSocketSession s = session;
                 if (s != null && s.isOpen()) {
                     return s.send(Mono.just(s.textMessage(msg)))
                         .timeout(timeout)
@@ -131,5 +144,10 @@ public class SttWebSocketClient {
                 }
             }, 1) // concurrency = 1, сохраняем порядок
             .subscribe();
+    }
+
+    public interface SttMessageHandler {
+
+        void onMessage(String json);
     }
 }

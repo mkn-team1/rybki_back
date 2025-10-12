@@ -7,8 +7,8 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class EventService {
 
-    public String createEvent(String creatorId) {
-        String eventId = java.util.UUID.randomUUID().toString();
+    public String createEvent(final String creatorId) {
+        final String eventId = java.util.UUID.randomUUID().toString();
         log.info("Creating new event: eventId={}, creatorId={}", eventId, creatorId);
 
         // TODO: записать в Redis что то (если это надо делать здесь)
@@ -16,7 +16,7 @@ public class EventService {
         return eventId;
     }
 
-    public void endEvent(String eventId) {
+    public void endEvent(final String eventId) {
         log.info("Ending event: eventId={}", eventId);
 
         // TODO: собрать все идеи, удалить ключи Redis (?), уведомить участников
