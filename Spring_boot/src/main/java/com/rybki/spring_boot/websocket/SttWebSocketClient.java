@@ -1,5 +1,6 @@
 package com.rybki.spring_boot.websocket;
 
+import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.reactive.socket.WebSocketMessage;
@@ -14,6 +15,7 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
+@RequiredArgsConstructor
 public class SttWebSocketClient {
 
     private final String sttUrl;
@@ -21,9 +23,8 @@ public class SttWebSocketClient {
     private final Duration reconnectInitialDelay;
     private final Duration reconnectMaxDelay;
 
-    private final ReactorNettyWebSocketClient client;
+    private final ReactorNettyWebSocketClient client = new ReactorNettyWebSocketClient();
     private final AtomicLong currentBackoffMs = new AtomicLong();
-    private final Sinks.Many<String> outQueue = Sinks.many().unicast().onBackpressureBuffer();
 
     private volatile WebSocketSession session;
     private volatile boolean running = false;
@@ -35,22 +36,11 @@ public class SttWebSocketClient {
         void onMessage(String json);
     }
 
-    public SttWebSocketClient(String sttUrl,
-                              Duration timeout,
-                              Duration reconnectInitialDelay,
-                              Duration reconnectMaxDelay) {
-        this.sttUrl = sttUrl;
-        this.timeout = timeout;
-        this.reconnectInitialDelay = reconnectInitialDelay;
-        this.reconnectMaxDelay = reconnectMaxDelay;
-        this.client = new ReactorNettyWebSocketClient();
-        this.currentBackoffMs.set(reconnectInitialDelay.toMillis());
-    }
-
     /** Запуск клиента */
     public void start() {
         if (running) return;
         running = true;
+        currentBackoffMs.set(reconnectInitialDelay.toMillis());
         connect();
         startSenderLoop();
     }
@@ -62,11 +52,13 @@ public class SttWebSocketClient {
         if (s != null && s.isOpen()) {
             s.close()
                 .doOnError(e -> log.error("Error closing session", e))
-                .subscribe();  // безопасно, поток запускается
+                .subscribe();
         }
     }
 
-    /** Отправка JSON в STT (асинхронно) */
+    private final Sinks.Many<String> outQueue = Sinks.many().unicast().onBackpressureBuffer();
+
+    /** Отправка JSON в STT */
     public void sendToStt(String json) {
         Sinks.EmitResult result = outQueue.tryEmitNext(json);
         if (result.isFailure()) {
@@ -116,7 +108,7 @@ public class SttWebSocketClient {
         log.info("Reconnecting in {} ms", delay);
 
         Mono.delay(Duration.ofMillis(delay), Schedulers.boundedElastic())
-            .doOnTerminate(this::connect)
+            .then(Mono.fromRunnable(this::connect))
             .subscribe();
 
         // увеличиваем backoff для следующей попытки
@@ -137,7 +129,7 @@ public class SttWebSocketClient {
                     log.warn("STT session not ready, dropping message");
                     return Mono.empty();
                 }
-            })
+            }, 1) // concurrency = 1, сохраняем порядок
             .subscribe();
     }
 }

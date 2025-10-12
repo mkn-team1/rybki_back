@@ -35,6 +35,11 @@ public class SessionService {
         });
     }
 
+    // Получить clientId и eventId сразу
+    public Mono<ClientSession> getSessionData(WebSocketSession session) {
+        return Mono.justOrEmpty(sessions.get(session.getId()));
+    }
+
     // Получить clientId по сессии
     public Mono<String> getClientIdBySession(WebSocketSession session) {
         ClientSession cs = sessions.get(session.getId());

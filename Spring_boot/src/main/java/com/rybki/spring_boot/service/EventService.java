@@ -11,7 +11,7 @@ public class EventService {
         String eventId = java.util.UUID.randomUUID().toString();
         log.info("Creating new event: eventId={}, creatorId={}", eventId, creatorId);
 
-        // TODO: записать в Redis participants и т.п.
+        // TODO: записать в Redis что то (если это надо делать здесь)
 
         return eventId;
     }
@@ -19,7 +19,6 @@ public class EventService {
     public void endEvent(String eventId) {
         log.info("Ending event: eventId={}", eventId);
 
-        // TODO: собрать все идеи, удалить ключи Redis, уведомить участников
-
+        // TODO: собрать все идеи, удалить ключи Redis (?), уведомить участников
     }
 }
