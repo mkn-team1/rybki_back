@@ -1,5 +1,7 @@
 package com.rybki.spring_boot.service;
 
+import com.rybki.spring_boot.model.domain.CreateEventRequest;
+import com.rybki.spring_boot.model.domain.EndEventRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -7,17 +9,17 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class EventService {
 
-    public String createEvent(final String creatorId) {
+    public String createEvent(final CreateEventRequest eventRequest) {
         final String eventId = java.util.UUID.randomUUID().toString();
-        log.info("Creating new event: eventId={}, creatorId={}", eventId, creatorId);
+        log.info("Creating new event: eventId={}, creatorId={}", eventId, eventRequest.getClientId());
 
         // TODO: записать в Redis что то (если это надо делать здесь)
 
         return eventId;
     }
 
-    public void endEvent(final String eventId) {
-        log.info("Ending event: eventId={}", eventId);
+    public void endEvent(final EndEventRequest endEventRequest) {
+        log.info("Ending event: eventId={}", endEventRequest.getEventId());
 
         // TODO: собрать все идеи, удалить ключи Redis (?), уведомить участников
     }
