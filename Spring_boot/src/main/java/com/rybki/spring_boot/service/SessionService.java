@@ -1,41 +1,87 @@
 package com.rybki.spring_boot.service;
 
+import com.rybki.spring_boot.model.domain.ClientSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.socket.WebSocketSession;
 
-import java.util.Map;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
-@Slf4j
 @Service
+@Slf4j
 public class SessionService {
 
-    // Ключ: eventId::clientId
-    private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    // key = clientId + ":" + eventId
+    private final ConcurrentHashMap<String, ClientSession> sessions = new ConcurrentHashMap<>();
 
-    private String key(String eventId, String clientId) {
-        return eventId + "::" + clientId;
+    /**
+     * Зарегистрировать новую сессию
+     */
+    public void register(WebSocketSession session, String clientId, String eventId) {
+        String key = makeKey(clientId, eventId);
+        ClientSession clientSession = new ClientSession(clientId, eventId, session);
+        sessions.put(key, clientSession);
+        log.info("Registered session: clientId={}, eventId={}, sessionId={}", clientId, eventId, session.getId());
     }
 
-    public void register(WebSocketSession session, String eventId, String clientId) {
-        sessions.put(key(eventId, clientId), session);
-        log.info("Registered session for eventId={}, clientId={}", eventId, clientId);
-    }
-
+    /**
+     * Удалить сессию
+     */
     public void unregister(WebSocketSession session) {
-        sessions.entrySet().removeIf(e -> e.getValue().equals(session));
-        log.info("Unregistered session: {}", session.getId());
+        sessions.entrySet().removeIf(entry -> {
+            if (entry.getValue().getSession().getId().equals(session.getId())) {
+                log.info("Unregistered session: clientId={}, eventId={}, sessionId={}",
+                    entry.getValue().getClientId(),
+                    entry.getValue().getEventId(),
+                    session.getId());
+                return true;
+            }
+            return false;
+        });
     }
 
-    public WebSocketSession getSession(String eventId, String clientId) {
-        return sessions.get(key(eventId, clientId));
+    /**
+     * Получить конкретную сессию по clientId и eventId
+     */
+    public ClientSession getSession(String eventId, String clientId) {
+        return sessions.get(makeKey(clientId, eventId));
     }
 
-    // Иногда нужно получить все сессии события (например, для рассылки)
-    public Map<String, WebSocketSession> getSessionsForEvent(String eventId) {
-        return sessions.entrySet().stream()
-            .filter(e -> e.getKey().startsWith(eventId + "::"))
-            .collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    /**
+     * Получить все сессии для event
+     */
+    public List<ClientSession> getSessionsForEvent(String eventId) {
+        return sessions.values().stream()
+            .filter(cs -> cs.getEventId().equals(eventId))
+            .collect(Collectors.toList());
+    }
+
+    /**
+     * Вспомогательный ключ
+     */
+    private String makeKey(String clientId, String eventId) {
+        return clientId + ":" + eventId;
+    }
+
+    /**
+     * Получить clientId по WebSocketSession
+     */
+    public String getClientIdBySession(WebSocketSession session) {
+        return sessions.values().stream()
+            .filter(cs -> cs.getSession().getId().equals(session.getId()))
+            .map(ClientSession::getClientId)
+            .findFirst().orElse(null);
+    }
+
+    /**
+     * Получить eventId по WebSocketSession
+     */
+    public String getEventIdBySession(WebSocketSession session) {
+        return sessions.values().stream()
+            .filter(cs -> cs.getSession().getId().equals(session.getId()))
+            .map(ClientSession::getEventId)
+            .findFirst().orElse(null);
     }
 }
