@@ -32,27 +32,27 @@ public class SessionService {
     // Получить clientId по сессии
     public String getClientIdBySession(WebSocketSession session) {
         ClientSession cs = sessions.get(session.getId());
-        return cs != null ? cs.getClientId() : null;
+        return cs != null ? cs.clientId() : null;
     }
 
     // Получить eventId по сессии
     public String getEventIdBySession(WebSocketSession session) {
         ClientSession cs = sessions.get(session.getId());
-        return cs != null ? cs.getEventId() : null;
+        return cs != null ? cs.eventId() : null;
     }
 
     // Получить все сессии для какого то event (например для рассылки сообщений/идей всем участникам события)
     public List<ClientSession> getSessionsForEvent(String eventId) {
         return sessions.values().stream()
-            .filter(cs -> cs.getEventId().equals(eventId))
+            .filter(cs -> cs.eventId().equals(eventId))
             .collect(Collectors.toList());
     }
 
     // Получить WS-сессию по eventId и clientId
     public WebSocketSession getSession(String eventId, String clientId) {
         return sessions.values().stream()
-            .filter(cs -> cs.getEventId().equals(eventId) && cs.getClientId().equals(clientId))
-            .map(ClientSession::getSession)
+            .filter(cs -> cs.eventId().equals(eventId) && cs.clientId().equals(clientId))
+            .map(ClientSession::session)
             .findFirst()
             .orElse(null);
     }

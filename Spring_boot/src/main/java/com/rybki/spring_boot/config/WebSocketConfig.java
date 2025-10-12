@@ -23,6 +23,7 @@ public class WebSocketConfig {
         return mapping;
     }
 
+    // для адаптации нашего WebSocketHandler в WebFlux
     @Bean
     public WebSocketHandlerAdapter handlerAdapter() {
         return new WebSocketHandlerAdapter();

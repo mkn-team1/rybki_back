@@ -18,14 +18,14 @@ public class Base64Util {
     }
 
     // Кодирование строки в Base64 (UTF-8)
-    public static String encode(String text) {
-        if (text == null) return null;
-        return encode(text.getBytes(StandardCharsets.UTF_8));
-    }
+    //public static String encode(String text) {
+    //    if (text == null) return null;
+    //    return encode(text.getBytes(StandardCharsets.UTF_8));
+    //}
 
     // Декодирование строки Base64 обратно в текст (UTF-8)
-    public static String decodeToString(String base64) {
-        if (base64 == null) return null;
-        return new String(decode(base64), StandardCharsets.UTF_8);
-    }
+    //public static String decodeToString(String base64) {
+    //    if (base64 == null) return null;
+    //    return new String(decode(base64), StandardCharsets.UTF_8);
+    //}
 }
