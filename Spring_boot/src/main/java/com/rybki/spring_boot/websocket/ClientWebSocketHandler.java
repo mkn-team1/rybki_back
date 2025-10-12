@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import org.springframework.web.reactive.socket.WebSocketMessage;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.UUID;
@@ -82,18 +83,34 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     }
 
     private Mono<Void> handleBinaryMessage(WebSocketSession session, WebSocketMessage message) {
-        byte[] pcmBytes = message.getPayload().asByteBuffer().array();
-
         String clientId = sessionService.getClientIdBySession(session);
         String eventId = sessionService.getEventIdBySession(session);
 
-        if (clientId != null && eventId != null) {
-            sttRoutingService.forwardAudio(clientId, eventId, pcmBytes);
-        } else {
+        if (clientId == null || eventId == null) {
             log.warn("Session not registered for binary message: sessionId={}", session.getId());
+            return Mono.empty();
         }
 
-        return Mono.empty();
+        // Преобразуем поток ByteBuffer в массив байт реактивно
+        return Flux.fromIterable(message.getPayload()::readableByteBuffers)
+            .flatMap(byteBuffer -> {
+                byte[] bytes = new byte[byteBuffer.remaining()];
+                byteBuffer.get(bytes);
+                return Mono.just(bytes);
+            })
+            .collectList()
+            .doOnNext(list -> {
+                // Объединяем все куски в один массив
+                int totalLength = list.stream().mapToInt(b -> b.length).sum();
+                byte[] pcmBytes = new byte[totalLength];
+                int offset = 0;
+                for (byte[] chunk : list) {
+                    System.arraycopy(chunk, 0, pcmBytes, offset, chunk.length);
+                    offset += chunk.length;
+                }
+                sttRoutingService.forwardAudio(clientId, eventId, pcmBytes);
+            })
+            .then();
     }
 
     private void handleDisconnect(WebSocketSession session) {
