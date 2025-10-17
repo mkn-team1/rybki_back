@@ -7,6 +7,8 @@ import lombok.Setter;
 @Getter
 @Setter
 @RequiredArgsConstructor
-public class EndEventRequest {
+public class JoinEventResponse {
 
+    private String eventId;
+    private String clientId;
 }

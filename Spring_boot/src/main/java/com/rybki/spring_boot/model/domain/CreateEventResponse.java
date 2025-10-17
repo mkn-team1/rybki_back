@@ -7,6 +7,10 @@ import lombok.Setter;
 @Getter
 @Setter
 @RequiredArgsConstructor
-public class EndEventRequest {
+public class CreateEventResponse {
 
+    private String clientId;
+    private String eventId;
+    private boolean isCreator = true;
+    private String joinToken;
 }
