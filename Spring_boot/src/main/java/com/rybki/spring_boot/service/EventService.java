@@ -18,7 +18,7 @@ public class EventService {
         return eventId;
     }
 
-    public void joinEvent(String eventId, String clientId) {
+    public void joinEvent(final String eventId, final String clientId) {
         log.info("Client {} joined event {}", clientId, eventId);
 
         // TODO: записать в Redis или список участников, если нужно

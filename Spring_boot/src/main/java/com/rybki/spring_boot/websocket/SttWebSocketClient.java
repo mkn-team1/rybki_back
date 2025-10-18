@@ -120,7 +120,7 @@ public class SttWebSocketClient {
     /**
      * Получение сообщений от STT
      */
-    private Mono<Void> startReceiveLoop(WebSocketSession ws) {
+    private Mono<Void> startReceiveLoop(final WebSocketSession ws) {
         return ws.receive()
             .map(WebSocketMessage::getPayloadAsText)
             .doOnNext(msg -> {
