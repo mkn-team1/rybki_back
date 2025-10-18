@@ -1,12 +1,12 @@
 package com.rybki.spring_boot.model.domain;
 
+import lombok.Builder;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 
 @Getter
 @Setter
-@RequiredArgsConstructor
+@Builder
 public class JoinEventResponse {
 
     private String eventId;

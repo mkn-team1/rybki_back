@@ -45,6 +45,21 @@ public class RedisIdeaRepository {
         redisTemplate.opsForSet().add(acceptedKey, ideaId);
     }
 
+    public void moveIdeaToRejected(final String ideaId, final String eventId) {
+        final Idea idea = findIdeaById(ideaId).orElseThrow();
+        idea.setStatus(IdeaStatus.ACCEPTED);
+
+        final String ideaKey = RedisKeys.ideaKey(ideaId);
+        redisTemplate.opsForValue().set(ideaKey, idea);
+
+        // Перемещаем между sets
+        final String pendingKey = RedisKeys.eventPendingIdeasKey(eventId);
+        final String acceptedKey = RedisKeys.eventRejectedIdeasKey(eventId);
+
+        redisTemplate.opsForSet().remove(pendingKey, ideaId);
+        redisTemplate.opsForSet().add(acceptedKey, ideaId);
+    }
+
     public Set<String> getPendingIdeas(final String eventId) {
         final String key = RedisKeys.eventPendingIdeasKey(eventId);
         return redisTemplate.opsForSet().members(key).stream()
@@ -54,6 +69,13 @@ public class RedisIdeaRepository {
 
     public Set<String> getAcceptedIdeas(final String eventId) {
         final String key = RedisKeys.eventAcceptedIdeasKey(eventId);
+        return redisTemplate.opsForSet().members(key).stream()
+            .map(Object::toString)
+            .collect(Collectors.toSet());
+    }
+
+    public Set<String> getRejectedIdeas(final String eventId) {
+        final String key = RedisKeys.eventRejectedIdeasKey(eventId);
         return redisTemplate.opsForSet().members(key).stream()
             .map(Object::toString)
             .collect(Collectors.toSet());

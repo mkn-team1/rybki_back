@@ -22,6 +22,10 @@ public class RedisKeys {
         return "event:" + eventId + ":accepted_ideas";
     }
 
+    public static String eventRejectedIdeasKey(final String eventId) {
+        return "event:" + eventId + ":rejected_ideas";
+    }
+
     public static String ideaKey(final String ideaId) {
         return "idea:" + ideaId;
     }

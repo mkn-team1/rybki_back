@@ -9,4 +9,5 @@ import lombok.Setter;
 @RequiredArgsConstructor
 public class EndEventRequest {
 
+    private String clientId;
 }
