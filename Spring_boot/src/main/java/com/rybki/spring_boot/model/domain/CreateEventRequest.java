@@ -4,13 +4,11 @@ import java.util.Map;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.annotation.Nullable;
-import lombok.Getter;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 
 @RequiredArgsConstructor
-@Getter
-@Setter
+@Data
 public class CreateEventRequest {
 
     @Nullable

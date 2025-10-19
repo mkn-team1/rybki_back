@@ -1,11 +1,9 @@
 package com.rybki.spring_boot.model.domain;
 
-import lombok.Getter;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import lombok.Setter;
 
-@Getter
-@Setter
+@Data
 @RequiredArgsConstructor
 public class EndEventRequest {
 
