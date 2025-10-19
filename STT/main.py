@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from app.stt_service import STTService
-from config import MODE
+from config import MODE, STT_HOST, STT_PORT
 
 logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -40,8 +40,8 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     uvicorn.run(
         app,
-        host="localhost",
-        port=8001,
+        host=STT_HOST,
+        port=STT_PORT,
         ws_ping_interval=20,
         ws_ping_timeout=20,
         timeout_keep_alive=5

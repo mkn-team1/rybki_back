@@ -1,5 +1,8 @@
 import os
 
+STT_HOST = os.getenv("STT_HOST", "localhost")
+STT_PORT = int(os.getenv("STT_PORT", "8081"))
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 MODE = os.getenv("MODE", "develop") # "develop" / "debug"

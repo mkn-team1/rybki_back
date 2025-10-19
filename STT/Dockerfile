@@ -24,6 +24,23 @@ COPY requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -r requirements.txt
 
+# Установка torch CPU-only ПЕРЕД speechbrain
+RUN --mount=type=cache,target=/root/.cache/uv \
+    if [ "$MODEL" = "Vosk" ]; then \
+        uv pip install --system torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu; \
+    else \
+        uv pip install --system torch==2.8.0 torchaudio==2.8.0; \
+    fi
+
+# Установка speechbrain БЕЗ зависимостей (torch уже установлен)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system --no-deps speechbrain==1.0.3
+
+COPY requirements-speechbrain.txt .
+# Установка зависимостей speechbrain
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r requirements-speechbrain.txt
+
 # Условная установка Whisper зависимостей
 COPY requirements-whisper.txt .
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -41,13 +58,11 @@ RUN python /tmp/download_models.py --model ${MODEL} && \
 # Копируем код
 COPY . .
 
-#Создание stub для WhisperManager если MODEL=Vosk
+# Заменяем whisper_model.py на stub если MODEL=Vosk
 RUN if [ "$MODEL" = "Vosk" ]; then \
-        echo "Creating stub WhisperManager..." && \
-        rm -f /app/whisper_model.py && \
-        echo 'class WhisperManager:\n    def __init__(self):\n        raise NotImplementedError("Whisper not available in this build")\n    def transcribe(self, *args, **kwargs):\n        raise NotImplementedError("Whisper not available in this build")' > /app/whisper_model.py; \
+        echo "Using stub WhisperManager..." && \
+        cp app/whisper_model_stub.py app/whisper_model.py; \
     fi
-
 
 EXPOSE 8081
 
