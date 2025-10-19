@@ -1,11 +1,12 @@
 package com.rybki.spring_boot.model.domain;
 
+import lombok.Builder;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
 
 @Data
-@RequiredArgsConstructor
-public class EndEventRequest {
+@Builder
+public class JoinEventResponse {
 
+    private String eventId;
     private String clientId;
 }

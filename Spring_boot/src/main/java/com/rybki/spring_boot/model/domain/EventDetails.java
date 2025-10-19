@@ -1,14 +1,9 @@
 package com.rybki.spring_boot.model.domain;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.RequiredArgsConstructor;
 
+
+@RequiredArgsConstructor
 public class EventDetails {
 
-    @Getter
-    @Setter
-    private String title;
-    @Getter
-    @Setter
-    private String description;
 }
