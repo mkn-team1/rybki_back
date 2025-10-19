@@ -9,6 +9,5 @@ public class CreateEventResponse {
 
     private String clientId;
     private String eventId;
-    private boolean isCreator = true;
     private String joinToken;
 }

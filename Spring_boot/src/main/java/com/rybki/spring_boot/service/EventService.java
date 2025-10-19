@@ -24,8 +24,7 @@ public class EventService {
     private final RedisEventRepository eventRepository;
 
     public CreateEventResponse createEvent(final CreateEventRequest eventRequest) {
-        final String clientId = eventRequest.getClientId() != null
-            ? eventRequest.getClientId() : UUID.randomUUID().toString();
+        final String clientId = UUID.randomUUID().toString();
         final String eventId = UUID.randomUUID().toString();
 
         log.info("Creating new event: eventId={}, creatorId={}", eventId, clientId);
@@ -35,7 +34,6 @@ public class EventService {
             .creatorClientId(clientId)
             .status(EventStatus.ACTIVE)
             .createdAt(Instant.now())
-            .metadata(eventRequest.getMetadata())
             .build();
 
         eventRepository.createEvent(event);
@@ -47,7 +45,6 @@ public class EventService {
         return CreateEventResponse.builder()
             .clientId(clientId)
             .eventId(eventId)
-            .isCreator(true)
             .joinToken(generateJoinToken(eventId))
             .build();
     }
@@ -62,10 +59,10 @@ public class EventService {
             throw new RuntimeException("Cannot join ended event: " + eventId);
         }
 
-        final String clientId = UUID.randomUUID().toString();
+        String clientId = UUID.randomUUID().toString();
 
-        if (eventRepository.isParticipant(eventId, clientId)) {
-            throw new RuntimeException("Client already joined event: " + eventId);
+        while (eventRepository.isParticipant(eventId, clientId)) {
+            clientId = UUID.randomUUID().toString();
         }
 
         eventRepository.addParticipant(eventId, clientId);
@@ -91,10 +88,13 @@ public class EventService {
         }
 
         // 3. ОБНОВЛЯЕМ СТАТУС СОБЫТИЯ В REDIS
+        /* Если мы хотим именно обновлять статус
         event.setStatus(EventStatus.ENDED);
         event.setEndedAt(Instant.now());
         eventRepository.updateEvent(event);
+        */
 
+        eventRepository.deleteEvent(eventId);
         // 4. СОБИРАЕМ СТАТИСТИКУ ИЗ REDIS
         final int participantCount = eventRepository.getParticipants(eventId).size();
         // TODO: собрать информацию об идеях, голосованиях и т.д.
