@@ -4,7 +4,7 @@ services:
     container_name: redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:${REDIS_PORT}"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -16,6 +16,8 @@ services:
   stt-service:
     build:
       context: ./STT
+      args:
+        MODEL: ${MODEL}
     container_name: stt-service
     restart: unless-stopped
     ports:
@@ -28,6 +30,13 @@ services:
       SILENCE_AFTER_S: ${SILENCE_AFTER_S}
       CHAR_THRESHOLD: ${CHAR_THRESHOLD}
       TIME_THRESHOLD: ${TIME_THRESHOLD}
+
+      # Whisper params
+      THREADS: 4
+      CHUNK_SIZE_S: 10
+      BEAM_SIZE: 1
+      COMPUTE_TYPE: int8 # "float16" for GPU or "int8" for CPU
+      DEVICE: CPU # "GPU" or "CPU"
 
   spring-backend:
     build:
@@ -42,8 +51,10 @@ services:
       GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
       STT_URL: ${STT_URL}
     depends_on:
-      - redis
-      - stt-service
+      redis:
+        condition: service_healthy
+      stt-service:
+        condition: service_started
 
 volumes:
   redis_data:

@@ -33,12 +33,8 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
-@app.websocket("/stt-ingest")
+@app.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):
-    """
-    WebSocket endpoint для подключения backend.
-    Принимает только одно подключение одновременно.
-    """
     await stt_service.handle_backend_connection(websocket)
 
 if __name__ == "__main__":
