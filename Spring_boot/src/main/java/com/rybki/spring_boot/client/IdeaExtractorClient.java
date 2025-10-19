@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 @Component
 @RequiredArgsConstructor
@@ -30,46 +31,54 @@ public class IdeaExtractorClient {
     @Value("${gigachat.api.url}")
     private String apiUrl;
 
-    public List<Idea> extractIdeas(String text) {
+    public Mono<List<Idea>> extractIdeas(String text) {
+        GigaChatRequestDto request = GigaChatRequestDto.createIdeaExtractionRequest(text);
+
+        return authService.getAccessToken()
+            .flatMap(accessToken -> {
+                if (accessToken == null || accessToken.isEmpty()) {
+                    log.warn("No access token available");
+                    return Mono.just(Collections.emptyList());
+                }
+
+                return webClient.post()
+                    .uri(apiUrl)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .header("Authorization", "Bearer " + accessToken)
+                    .bodyValue(request)
+                    .retrieve()
+                    .bodyToMono(GigaChatResponseDto.class)
+                    .timeout(Duration.ofSeconds(30))
+                    .flatMap(this::parseResponse)
+                    .onErrorResume(e -> {
+                        log.error("Failed to extract ideas", e);
+                        return Mono.just(Collections.emptyList());
+                    });
+            });
+    }
+
+    private Mono<List<Idea>> parseResponse(GigaChatResponseDto response) {
+        if (response == null || response.choices() == null || response.choices().isEmpty()) {
+            return Mono.just(Collections.emptyList());
+        }
+
+        String content = response.choices().get(0).message().content();
+        String jsonContent = extractJsonFromMarkdown(content);
+
         try {
-            String accessToken = authService.getAccessToken();
-            if (accessToken == null) {
-                return Collections.emptyList();
-            }
-
-            GigaChatRequestDto request = GigaChatRequestDto.createIdeaExtractionRequest(text);
-
-            GigaChatResponseDto response = webClient.post()
-                .uri(apiUrl)
-                .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .header("Authorization", "Bearer " + accessToken)
-                .bodyValue(request)
-                .retrieve()
-                .bodyToMono(GigaChatResponseDto.class)
-                .timeout(Duration.ofSeconds(30))
-                .block();
-
-            if (response == null || response.choices() == null || response.choices().isEmpty()) {
-                return Collections.emptyList();
-            }
-
-            String content = response.choices().get(0).message().content();
-
-            String jsonContent = extractJsonFromMarkdown(content);
-
             NnResponseDto nnResponse = objectMapper.readValue(jsonContent, NnResponseDto.class);
 
             if ("no_ideas_found".equalsIgnoreCase(nnResponse.status())) {
-                return Collections.emptyList();
+                return Mono.just(Collections.emptyList());
             }
 
             if (nnResponse.ideas() == null || nnResponse.ideas().isEmpty()) {
                 log.warn("nnResponse status is success but no ideas found");
-                return Collections.emptyList();
+                return Mono.just(Collections.emptyList());
             }
 
-            return nnResponse.ideas().stream()
+            List<Idea> ideas = nnResponse.ideas().stream()
                 .map(idea -> new Idea(
                     idea.id(),
                     idea.title(),
@@ -77,12 +86,11 @@ public class IdeaExtractorClient {
                 ))
                 .toList();
 
+            return Mono.just(ideas);
+
         } catch (JsonProcessingException e) {
             log.error("Failed to process JSON", e);
-            return Collections.emptyList();
-        } catch (Exception e) {
-            log.error("Failed to extract ideas", e);
-            return Collections.emptyList();
+            return Mono.just(Collections.emptyList());
         }
     }
 

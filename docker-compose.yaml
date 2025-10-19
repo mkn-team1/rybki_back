@@ -1,0 +1,62 @@
+services:
+  redis:
+    image: redis:7.2.4-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT}:${REDIS_PORT}"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  stt-service:
+    build:
+      context: ./STT
+      args:
+        MODEL: ${MODEL}
+    container_name: stt-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      MODEL: ${MODEL}
+      MIN_SEND_S: ${MIN_SEND_S}
+      PREFERRED_SEND_S: ${PREFERRED_SEND_S}
+      MAX_SEND_S: ${MAX_SEND_S}
+      SILENCE_AFTER_S: ${SILENCE_AFTER_S}
+      CHAR_THRESHOLD: ${CHAR_THRESHOLD}
+      TIME_THRESHOLD: ${TIME_THRESHOLD}
+      STT_HOST: stt-service
+      STT_PORT: 8081
+
+      # Whisper params
+      THREADS: 4
+      CHUNK_SIZE_S: 10
+      BEAM_SIZE: 1
+      COMPUTE_TYPE: int8 # "float16" for GPU or "int8" for CPU
+      DEVICE: CPU # "GPU" or "CPU"
+
+  spring-backend:
+    build:
+      context: ./Spring_boot
+    container_name: spring-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
+      STT_URL: ${STT_URL}
+    depends_on:
+      redis:
+        condition: service_healthy
+      stt-service:
+        condition: service_started
+
+volumes:
+  redis_data:
