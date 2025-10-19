@@ -24,7 +24,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 public class IdeaExtractorClient {
 
     private final WebClient webClient = WebClient.builder().build();
-    ;
     private final GigaChatAuthService authService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 

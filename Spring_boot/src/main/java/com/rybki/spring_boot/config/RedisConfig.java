@@ -10,14 +10,18 @@ import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactor
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class RedisConfig {
 
+    @Value("${spring.data.redis.host}")
+    private String redisHost;
+    @Value("${spring.data.redis.port}")
+    private int redisPort;
+
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
-        final String redisHost = "localhost";
-        final int redisPort = 6379;
         final LettuceConnectionFactory factory = new LettuceConnectionFactory(redisHost, redisPort);
         factory.afterPropertiesSet();
         return factory;

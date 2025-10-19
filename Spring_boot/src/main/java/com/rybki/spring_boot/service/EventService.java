@@ -45,7 +45,6 @@ public class EventService {
         return CreateEventResponse.builder()
             .clientId(clientId)
             .eventId(eventId)
-            .joinToken(generateJoinToken(eventId))
             .build();
     }
 
@@ -105,10 +104,5 @@ public class EventService {
         // websocketService.broadcastEventEnded(eventId, summary);
 
         return new EndEventResponse(); // можно добавить поля при необходимости
-    }
-
-    private String generateJoinToken(final String eventId) {
-        final int lengthOfToken = 8;
-        return "token_" + eventId + "_" + UUID.randomUUID().toString().substring(0, lengthOfToken);
     }
 }

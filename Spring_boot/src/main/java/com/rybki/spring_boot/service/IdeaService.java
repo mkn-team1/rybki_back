@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 public class IdeaService {
 
     private final IdeaExtractorClient ideaExtractorClient;
-    private final OutMessageSenderService outMessageSenderService;
+    private final ClientNotificationService clientNotificationService;
 
     public void processText(String clientId, String eventId, String text) {
         try {
@@ -24,7 +24,7 @@ public class IdeaService {
             }
 
             for (Idea idea : ideas) {
-                outMessageSenderService.sendIdeaToClient(clientId, eventId, idea);
+                clientNotificationService.sendIdeaToClient(clientId, eventId, idea);
             }
 
         } catch (Exception e) {

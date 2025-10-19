@@ -32,6 +32,7 @@ public class SttResponseHandler {
                     clientId, eventId, text);
 
                 // делегируем нейронке в ideaService, передавая нужные id и текст
+                ideaService.processText(clientId, eventId, text);
 
             } else {
                 log.debug("Unknown STT message type: {}", type);

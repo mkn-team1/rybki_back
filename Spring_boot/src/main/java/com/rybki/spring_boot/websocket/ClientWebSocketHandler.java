@@ -61,6 +61,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     }
 
     private Mono<Void> handleStart(final WebSocketSession session, final JsonNode jsonNode) {
+        // TODO: Вместо генерации Id, если его нет, нужно обрывать подключение
         final String clientId =
             jsonNode.has("clientId") ? jsonNode.get("clientId").asText() : UUID.randomUUID().toString();
         final String eventId =
