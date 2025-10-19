@@ -1,19 +1,22 @@
 package com.rybki.spring_boot.util;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 public class Base64Util {
 
     // Кодирование массива байт в Base64
-    public static String encode(byte[] bytes) {
-        if (bytes == null) return null;
+    public static String encode(final byte[] bytes) {
+        if (bytes == null) {
+            return null;
+        }
         return Base64.getEncoder().encodeToString(bytes);
     }
 
     // Декодирование строки Base64 в массив байт
-    public static byte[] decode(String base64) {
-        if (base64 == null) return null;
+    public static byte[] decode(final String base64) {
+        if (base64 == null) {
+            return null;
+        }
         return Base64.getDecoder().decode(base64);
     }
 

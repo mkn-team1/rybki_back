@@ -91,12 +91,12 @@ public class SttWebSocketClient {
                         this.session = null;
                         scheduleReconnect();
                     });
-            })
-            .doOnError(e -> {
+            }
+        ).doOnError(e -> {
                 log.error("Failed to connect to STT, scheduling reconnect", e);
                 scheduleReconnect();
-            })
-            .subscribe();
+            }
+        ).subscribe();
     }
 
     /**
@@ -120,14 +120,14 @@ public class SttWebSocketClient {
     /**
      * Получение сообщений от STT
      */
-    private Mono<Void> startReceiveLoop(WebSocketSession ws) {
+    private Mono<Void> startReceiveLoop(final WebSocketSession ws) {
         return ws.receive()
             .map(WebSocketMessage::getPayloadAsText)
             .doOnNext(msg -> {
                 log.debug("Received from STT: {}", msg);
                 try {
                     responseHandler.handle(msg);
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     log.error("Error while handling STT message", e);
                 }
             })

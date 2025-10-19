@@ -2,6 +2,7 @@ package com.rybki.spring_boot.websocket;
 
 import java.util.UUID;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rybki.spring_boot.service.SessionService;
 import com.rybki.spring_boot.service.SttRoutingService;
@@ -15,7 +16,6 @@ import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
 import reactor.core.publisher.Mono;
 
-
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -27,7 +27,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
-    public @NotNull Mono<Void> handle(final @NotNull WebSocketSession session) {
+    public @NotNull Mono<Void> handle(@NotNull final WebSocketSession session) {
         log.info("Client connected: sessionId={}", session.getId());
 
         return session.receive()
@@ -43,7 +43,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private Mono<Void> handleTextMessage(final WebSocketSession session, final WebSocketMessage message) {
         return Mono.fromCallable(() -> objectMapper.readTree(message.getPayloadAsText()))
             .flatMap(jsonNode -> {
-                String type = jsonNode.path("type").asText();
+                final String type = jsonNode.path("type").asText();
                 return switch (type) {
                     case "start" -> handleStart(session, jsonNode);
                     case "end" -> handleEnd(session);
@@ -60,8 +60,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
             });
     }
 
-    private Mono<Void> handleStart(final WebSocketSession session,
-        final com.fasterxml.jackson.databind.JsonNode jsonNode) {
+    private Mono<Void> handleStart(final WebSocketSession session, final JsonNode jsonNode) {
         final String clientId =
             jsonNode.has("clientId") ? jsonNode.get("clientId").asText() : UUID.randomUUID().toString();
         final String eventId =
@@ -73,20 +72,18 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     }
 
     private Mono<Void> handleEnd(final WebSocketSession session) {
-        return notifyEndIfRegistered(session)
-            .then(sessionService.unregister(session)
+        return sessionService.getSessionData(session)
+            .flatMap(cs -> sttRoutingService.notifyEnd(cs.clientId(), cs.eventId())
+                .then(sessionService.unregister(session))
                 .doOnSuccess(v -> log.info("End: sessionId={}", session.getId()))
-            );
+            )
+            .then();
     }
 
-    private Mono<Void> handleVote(final WebSocketSession session,
-        final com.fasterxml.jackson.databind.JsonNode jsonNode) {
-        return Mono.zip(
-                sessionService.getClientIdBySession(session),
-                sessionService.getEventIdBySession(session)
-            )
-            .flatMap(tuple -> voteService.registerVote(tuple.getT1(), tuple.getT2(), jsonNode)
-                .doOnSuccess(v -> log.info("Vote: clientId={}, eventId={}", tuple.getT1(), tuple.getT2()))
+    private Mono<Void> handleVote(final WebSocketSession session, final JsonNode jsonNode) {
+        return sessionService.getSessionData(session)
+            .flatMap(cs -> voteService.registerVote(cs.clientId(), cs.eventId(), jsonNode)
+                .doOnSuccess(v -> log.info("Vote: clientId={}, eventId={}", cs.clientId(), cs.eventId()))
                 .then()
             )
             .onErrorResume(e -> {
@@ -96,16 +93,13 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     }
 
     private Mono<Void> handleBinaryMessage(final WebSocketSession session, final WebSocketMessage message) {
-        return Mono.zip(
-                sessionService.getClientIdBySession(session),
-                sessionService.getEventIdBySession(session)
-            )
-            .flatMap(tuple -> {
+        return sessionService.getSessionData(session)
+            .flatMap(cs -> {
                 final byte[] bytes = new byte[message.getPayload().readableByteCount()];
                 message.getPayload().read(bytes);
-                return sttRoutingService.forwardAudio(tuple.getT1(), tuple.getT2(), bytes)
+                return sttRoutingService.forwardAudio(cs.clientId(), cs.eventId(), bytes)
                     .doOnError(
-                        e -> log.error("Failed to forward audio: clientId={}, eventId={}", tuple.getT1(), tuple.getT2(),
+                        e -> log.error("Failed to forward audio: clientId={}, eventId={}", cs.clientId(), cs.eventId(),
                             e));
             })
             .onErrorResume(e -> {
@@ -115,18 +109,10 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     }
 
     private void handleDisconnect(final WebSocketSession session) {
-        notifyEndIfRegistered(session)
+        sessionService.getSessionData(session)
+            .flatMap(cs -> sttRoutingService.notifyEnd(cs.clientId(), cs.eventId()))
             .then(sessionService.unregister(session))
             .doOnSuccess(v -> log.info("Client disconnected: sessionId={}", session.getId()))
             .subscribe();
-    }
-
-    private Mono<Void> notifyEndIfRegistered(final WebSocketSession session) {
-        return Mono.zip(
-                sessionService.getClientIdBySession(session),
-                sessionService.getEventIdBySession(session)
-            )
-            .flatMap(tuple -> sttRoutingService.notifyEnd(tuple.getT1(), tuple.getT2()))
-            .then();
     }
 }
