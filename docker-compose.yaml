@@ -1,0 +1,49 @@
+services:
+  redis:
+    image: redis:7.2.4-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  stt-service:
+    build:
+      context: ./STT
+    container_name: stt-service
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      MODEL: ${MODEL}
+      MIN_SEND_S: ${MIN_SEND_S}
+      PREFERRED_SEND_S: ${PREFERRED_SEND_S}
+      MAX_SEND_S: ${MAX_SEND_S}
+      SILENCE_AFTER_S: ${SILENCE_AFTER_S}
+      CHAR_THRESHOLD: ${CHAR_THRESHOLD}
+      TIME_THRESHOLD: ${TIME_THRESHOLD}
+
+  spring-backend:
+    build:
+      context: ./Spring_boot
+    container_name: spring-backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
+      STT_URL: ${STT_URL}
+    depends_on:
+      - redis
+      - stt-service
+
+volumes:
+  redis_data:
