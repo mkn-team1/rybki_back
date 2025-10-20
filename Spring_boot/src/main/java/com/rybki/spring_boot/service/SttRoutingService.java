@@ -38,13 +38,13 @@ public class SttRoutingService {
                 final String json = objectMapper.writeValueAsString(payload);
                 sttClient.sendToStt(json);
 
-                log.debug("Forwarded audio to STT: clientId={}, eventId={}, size={} bytes",
+                log.debug("📤 Forwarded audio to STT: clientId={}, eventId={}, size={} bytes",
                     clientId, eventId, pcmChunk.length);
 
             } catch (JsonProcessingException e) {
-                log.error("Failed to serialize audio JSON: clientId={}, eventId={}", clientId, eventId, e);
+                log.error("❌ [STT-ROUTING] Failed to serialize audio JSON: clientId={}, eventId={}", clientId, eventId, e);
             } catch (Exception e) {
-                log.error("Failed to forward audio to STT: clientId={}, eventId={}", clientId, eventId, e);
+                log.error("❌ [STT-ROUTING] Failed to forward audio to STT: clientId={}, eventId={}", clientId, eventId, e);
             }
         }).subscribeOn(Schedulers.boundedElastic()).then();
     }
@@ -63,7 +63,7 @@ public class SttRoutingService {
                 final String json = objectMapper.writeValueAsString(payload);
                 sttClient.sendToStt(json);
 
-                log.info("Sent disconnect to STT for clientId={}, eventId={}", clientId, eventId);
+                log.info("📤 Sent disconnect to STT for clientId={}, eventId={}", clientId, eventId);
 
             } catch (JsonProcessingException e) {
                 log.error("Failed to serialize disconnect JSON: clientId={}, eventId={}", clientId, eventId, e);

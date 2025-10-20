@@ -19,20 +19,23 @@ public class IdeaService {
     private final ClientNotificationService clientNotificationService;
 
     public Mono<Void> processText(String clientId, String eventId, String text) {
+        log.info("💡 [IDEA-SERVICE] Starting idea extraction: clientId={}, eventId={}, textLength={} chars", clientId, eventId, text.length());
+        log.debug("💡 [IDEA-SERVICE] Text: \"{}\"", text);
+        
         return ideaExtractorClient.extractIdeas(text)
             .flatMap(ideas -> processIdeas(clientId, eventId, ideas))
-            .doOnSuccess(v -> log.info("Completed processing ideas for clientId={}, eventId={}", clientId, eventId))
-            .doOnError(e -> log.error("Failed to process text for clientId={}, eventId={}", clientId, eventId, e))
+            .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Completed processing ideas for clientId={}, eventId={}", clientId, eventId))
+            .doOnError(e -> log.error("❌ [IDEA-SERVICE] Failed to process ideas for clientId={}, eventId={}", clientId, eventId, e))
             .onErrorResume(e -> Mono.empty());
     }
 
     private Mono<Void> processIdeas(String clientId, String eventId, List<Idea> ideas) {
         if (ideas == null || ideas.isEmpty()) {
-            log.info("No ideas found for clientId={}, eventId={}", clientId, eventId);
+            log.info("⚠️ [IDEA-SERVICE] No ideas found for clientId={}, eventId={}", clientId, eventId);
             return Mono.empty();
         }
 
-        log.info("Processing {} ideas for clientId={}, eventId={}", ideas.size(), clientId, eventId);
+        log.info("📥 [IDEA-SERVICE] Sending {} ideas for clientId={}, eventId={}", ideas.size(), clientId, eventId);
 
         return Flux.fromIterable(ideas)
             .flatMap(idea -> clientNotificationService.sendIdeaToClient(clientId, eventId, idea))

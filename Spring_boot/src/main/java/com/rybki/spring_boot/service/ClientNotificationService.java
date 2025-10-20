@@ -21,7 +21,7 @@ public class ClientNotificationService {
     public Mono<Void> sendIdeaToClient(String clientId, String eventId, Idea idea) {
         return sessionService.getSession(eventId, clientId)
             .flatMap(session -> sendMessage(session, clientId, eventId, idea))
-            .doOnError(e -> log.error("Failed to send idea to client: {}", clientId, e))
+            .doOnError(e -> log.error("❌ [CLIENT-NOTIFICATION] Failed to send idea to client: {}", clientId, e))
             .onErrorResume(e -> Mono.empty());
     }
 
@@ -37,11 +37,12 @@ public class ClientNotificationService {
             String message = objectMapper.writeValueAsString(messageMap);
 
             return session.send(Mono.just(session.textMessage(message)))
-                .doOnSuccess(v -> log.info("Sent idea to client: clientId={}, ideaId={}", clientId, idea.id()))
+                .doOnSuccess(v -> log.info("✅ [CLIENT-NOTIFICATION] Sent idea to client: clientId={}, idea={}", clientId, idea))
+                .doOnError(e -> log.error("❌ [CLIENT-NOTIFICATION] Failed to send idea to client: {}", clientId, e))
                 .then();
 
         } catch (Exception e) {
-            log.error("Failed to serialize idea message", e);
+            log.error("❌ [CLIENT-NOTIFICATION] Failed to serialize idea message", e);
             return Mono.empty();
         }
     }

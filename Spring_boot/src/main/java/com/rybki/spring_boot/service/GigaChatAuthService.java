@@ -35,16 +35,16 @@ public class GigaChatAuthService {
     @PostConstruct
     public void init() {
         refreshToken()
-            .doOnSuccess(token -> log.info("Initial GigaChat token obtained"))
-            .doOnError(e -> log.error("Failed to obtain initial token", e))
+            .doOnSuccess(token -> log.info("✅ [GIGACHAT-AUTH] Initial GigaChat token obtained"))
+            .doOnError(e -> log.error("❌ [GIGACHAT-AUTH] Failed to obtain initial token", e))
             .subscribe();
     }
 
     @Scheduled(fixedRate = 1800000) // 30 минут
     public void scheduledRefresh() {
         refreshToken()
-            .doOnSuccess(token -> log.info("Scheduled token refresh completed"))
-            .doOnError(e -> log.error("Scheduled token refresh failed", e))
+            .doOnSuccess(token -> log.info("✅ [GIGACHAT-AUTH] Scheduled token refresh completed"))
+            .doOnError(e -> log.error("❌ [GIGACHAT-AUTH] Scheduled token refresh failed", e))
             .subscribe();
     }
 
@@ -64,10 +64,10 @@ public class GigaChatAuthService {
             .doOnNext(tokenDto -> {
                 accessToken.set(tokenDto.accessToken());
                 tokenExpiresAt.set(tokenDto.expiresAt());
-                log.info("Access token refreshed, expires at: {}", tokenDto.expiresAt());
+                log.info("✅ [GIGACHAT-AUTH] Access token refreshed, expires at: {}", tokenDto.expiresAt());
             })
             .map(GigaChatTokenDto::accessToken)
-            .doOnError(e -> log.error("Failed to refresh access token", e))
+            .doOnError(e -> log.error("❌ [GIGACHAT-AUTH] Failed to refresh access token", e))
             .onErrorResume(e -> Mono.empty());
     }
 
