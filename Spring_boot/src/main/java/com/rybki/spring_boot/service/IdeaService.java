@@ -20,11 +20,10 @@ public class IdeaService {
 
     public Mono<Void> processText(String clientId, String eventId, String text) {
         log.info("💡 [IDEA-SERVICE] Starting idea extraction: clientId={}, eventId={}, textLength={} chars", clientId, eventId, text.length());
-        log.debug("💡 [IDEA-SERVICE] Text: \"{}\"", text);
+        log.info("💡 [IDEA-SERVICE] Text: \"{}\"", text);
         
         return ideaExtractorClient.extractIdeas(text)
             .flatMap(ideas -> processIdeas(clientId, eventId, ideas))
-            .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Completed processing ideas for clientId={}, eventId={}", clientId, eventId))
             .doOnError(e -> log.error("❌ [IDEA-SERVICE] Failed to process ideas for clientId={}, eventId={}", clientId, eventId, e))
             .onErrorResume(e -> Mono.empty());
     }
@@ -35,7 +34,7 @@ public class IdeaService {
             return Mono.empty();
         }
 
-        log.info("📥 [IDEA-SERVICE] Sending {} ideas for clientId={}, eventId={}", ideas.size(), clientId, eventId);
+        log.info("💡 [IDEA-SERVICE] Found {} ideas", ideas.size());
 
         return Flux.fromIterable(ideas)
             .flatMap(idea -> clientNotificationService.sendIdeaToClient(clientId, eventId, idea))

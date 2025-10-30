@@ -143,11 +143,11 @@ public class SttWebSocketClient {
      * Отправка сообщений из очереди
      */
     private void startSenderLoop() {
+        log.debug("📤 [BACKEND->STT] Sender loop has started");
         outQueue.asFlux()
             .flatMap(msg -> {
                 final WebSocketSession s = session;
                 if (s != null && s.isOpen()) {
-                    log.info("📤 [BACKEND->STT] Sending message through WebSocket to STT: length={} chars", msg.length());
                     return s.send(Mono.just(s.textMessage(msg)))
                         .timeout(timeout)
                         .doOnSuccess(v -> {

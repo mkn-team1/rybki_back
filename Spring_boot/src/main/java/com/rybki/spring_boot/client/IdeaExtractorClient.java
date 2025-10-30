@@ -34,6 +34,8 @@ public class IdeaExtractorClient {
     public Mono<List<Idea>> extractIdeas(String text) {
         GigaChatRequestDto request = GigaChatRequestDto.createIdeaExtractionRequest(text);
 
+        log.debug("📤 [GIGACHAT] Sending request to find ideas from: {}", text);
+
         return authService.getAccessToken()
             .flatMap(accessToken -> {
                 if (accessToken == null || accessToken.isEmpty()) {
@@ -51,7 +53,6 @@ public class IdeaExtractorClient {
                     .bodyToMono(GigaChatResponseDto.class)
                     .timeout(Duration.ofSeconds(30))
                     .doOnNext(response -> {
-                        log.info("📥 [GIGACHAT] Response received");
                         log.debug("📥 [GIGACHAT] Response: {}", response);
                     })
                     .flatMap(this::parseResponse)

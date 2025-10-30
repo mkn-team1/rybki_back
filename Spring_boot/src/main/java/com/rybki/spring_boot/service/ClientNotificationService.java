@@ -36,6 +36,10 @@ public class ClientNotificationService {
 
             String message = objectMapper.writeValueAsString(messageMap);
 
+            log.info("💡 [IDEA-SERVICE] Found idea: {}", idea);
+
+            log.debug("📥 [CLIENT-NOTIFICATION] Sending idea to client: {}", idea.title());
+
             return session.send(Mono.just(session.textMessage(message)))
                 .doOnSuccess(v -> log.info("✅ [CLIENT-NOTIFICATION] Sent idea to client: clientId={}, idea={}", clientId, idea))
                 .doOnError(e -> log.error("❌ [CLIENT-NOTIFICATION] Failed to send idea to client: {}", clientId, e))
