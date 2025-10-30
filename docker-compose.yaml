@@ -52,6 +52,7 @@ services:
       REDIS_PORT: ${REDIS_PORT}
       GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
       STT_URL: ${STT_URL}
+      AUDIO_DUMP_ENABLED: true
     depends_on:
       redis:
         condition: service_healthy
