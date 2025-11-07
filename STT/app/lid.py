@@ -2,7 +2,7 @@ import numpy as np
 import logging
 import torch
 import os
-from speechbrain.inference.speaker import EncoderClassifier
+from speechbrain.inference.classifiers import EncoderClassifier
 from config import SAMPLE_RATE, BASE_DIR
 
 logger = logging.getLogger(__name__)
