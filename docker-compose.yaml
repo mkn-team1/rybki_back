@@ -30,7 +30,6 @@ services:
       SILENCE_AFTER_S: ${SILENCE_AFTER_S}
       CHAR_THRESHOLD: ${CHAR_THRESHOLD}
       TIME_THRESHOLD: ${TIME_THRESHOLD}
-      STT_HOST: stt-service
       STT_PORT: 8081
 
       # Whisper params
@@ -39,6 +38,12 @@ services:
       BEAM_SIZE: 1
       COMPUTE_TYPE: int8 # "float16" for GPU or "int8" for CPU
       DEVICE: CPU # "GPU" or "CPU"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   spring-backend:
     build:
@@ -56,7 +61,7 @@ services:
       redis:
         condition: service_healthy
       stt-service:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   redis_data:

@@ -34,12 +34,14 @@ class SpeechBrainLID:
     def _normalize_lang_code(self, lang: str) -> str:
         lang = lang.lower().split(':')[0].strip()
         
-        # Supported languages mapping
-        if lang in ['ru', 'rus']:
-            return 'ru'
-        elif lang in ['en', 'eng']:
-            return 'en'
-        else:
-            logger.debug(f"Unsupported language detected: {lang}, falling back to 'en'")
-            return 'en'
+        # TODO: Добавить стабильное распознование дургих языков
+        # if lang in ['ru', 'rus']:
+        #     return 'ru'
+        # elif lang in ['en', 'eng']:
+        #     return 'en'
+        # else:
+        #     logger.debug(f"Unsupported language detected: {lang}, falling back to 'en'")
+        #     return 'en'
+
+        return 'ru'
     

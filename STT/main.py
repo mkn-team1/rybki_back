@@ -2,9 +2,10 @@ import uvicorn
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.stt_service import STTService
-from config import MODE, STT_HOST, STT_PORT
+from config import MODE, STT_PORT
 
 logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -15,7 +16,15 @@ logger = logging.getLogger(__name__)
 
 logger.info("🚀 Starting STT service - waiting for backend connection")
 
-stt_service = STTService()
+READY = False
+
+try:
+    stt_service = STTService()
+    READY = True
+except Exception as e:
+    logger.error(f"❌ Failed to initialize STT service: {e}")
+    raise
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -33,6 +42,17 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+@app.get("/health")
+async def health():
+    if not READY:
+        logger.warning("Health check failed - service not ready")
+        return JSONResponse(
+            status_code=503,
+            content={"status": "loading", "message": "Models are being loaded"}
+        )
+    return {"status": "ok", "message": "STT service is ready"}
+
+
 @app.websocket("/ws/stt")
 async def websocket_endpoint(websocket: WebSocket):
     await stt_service.handle_backend_connection(websocket)
@@ -40,7 +60,7 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     uvicorn.run(
         app,
-        host=STT_HOST,
+        host="0.0.0.0",
         port=STT_PORT,
         ws_ping_interval=20,
         ws_ping_timeout=20,
