@@ -4,6 +4,7 @@ import java.util.UUID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rybki.spring_boot.service.AudioDumpService;
 import com.rybki.spring_boot.service.SessionService;
 import com.rybki.spring_boot.service.SttRoutingService;
 import com.rybki.spring_boot.service.VoteService;
@@ -25,6 +26,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private final SttRoutingService sttRoutingService;
     private final VoteService voteService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final AudioDumpService audioDumpService;
 
     @Override
     public @NotNull Mono<Void> handle(@NotNull final WebSocketSession session) {
@@ -67,18 +69,20 @@ public class ClientWebSocketHandler implements WebSocketHandler {
         final String eventId =
             jsonNode.has("eventId") ? jsonNode.get("eventId").asText() : UUID.randomUUID().toString();
 
-        return sessionService.register(session, clientId, eventId)
+        return audioDumpService.start(session.getId(), clientId, eventId) // Начинаем сохранять аудио
+            .then(sessionService.register(session, clientId, eventId))
             .doOnSuccess(v -> log.info("Start: clientId={}, eventId={}", clientId, eventId))
             .then();
     }
 
     private Mono<Void> handleEnd(final WebSocketSession session) {
-        return sessionService.getSessionData(session)
-            .flatMap(cs -> sttRoutingService.notifyEnd(cs.clientId(), cs.eventId())
-                .then(sessionService.unregister(session))
-                .doOnSuccess(v -> log.info("End: sessionId={}", session.getId()))
-            )
-            .then();
+        return audioDumpService.stop(session.getId()) // Завершаем сохранение аудио
+            .then(sessionService.getSessionData(session)
+                .flatMap(cs -> sttRoutingService.notifyEnd(cs.clientId(), cs.eventId())
+                    .then(sessionService.unregister(session))
+                    .doOnSuccess(v -> log.info("End: sessionId={}", session.getId()))
+                )
+            );
     }
 
     private Mono<Void> handleVote(final WebSocketSession session, final JsonNode jsonNode) {
@@ -98,7 +102,8 @@ public class ClientWebSocketHandler implements WebSocketHandler {
             .flatMap(cs -> {
                 final byte[] bytes = new byte[message.getPayload().readableByteCount()];
                 message.getPayload().read(bytes);
-                return sttRoutingService.forwardAudio(cs.clientId(), cs.eventId(), bytes)
+                return audioDumpService.append(session.getId(), bytes)
+                    .then(sttRoutingService.forwardAudio(cs.clientId(), cs.eventId(), bytes))
                     .doOnError(
                         e -> log.error("Failed to forward audio: clientId={}, eventId={}", cs.clientId(), cs.eventId(),
                             e));
@@ -110,9 +115,11 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     }
 
     private void handleDisconnect(final WebSocketSession session) {
-        sessionService.getSessionData(session)
-            .flatMap(cs -> sttRoutingService.notifyEnd(cs.clientId(), cs.eventId()))
-            .then(sessionService.unregister(session))
+        audioDumpService.stop(session.getId()) // Завершаем сохранение аудио
+            .then(sessionService.getSessionData(session)
+                .flatMap(cs -> sttRoutingService.notifyEnd(cs.clientId(), cs.eventId()))
+                .then(sessionService.unregister(session))
+            )
             .doOnSuccess(v -> log.info("Client disconnected: sessionId={}", session.getId()))
             .subscribe();
     }

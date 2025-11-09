@@ -54,7 +54,7 @@ public class SttWebSocketClient {
         final WebSocketSession s = session;
         if (s != null && s.isOpen()) {
             s.close()
-                .doOnError(e -> log.error("Error closing STT session", e))
+                .doOnError(e -> log.error("❌ [STT-CLIENT] Error closing STT session", e))
                 .subscribe();
         }
     }
@@ -63,9 +63,12 @@ public class SttWebSocketClient {
      * Отправка JSON в STT
      */
     public void sendToStt(final String json) {
+        log.debug("📤 [STT-CLIENT] Enqueuing message to outQueue: {}", json);
         final Sinks.EmitResult result = outQueue.tryEmitNext(json);
         if (result.isFailure()) {
-            log.warn("Failed to enqueue STT message: {}", result);
+            log.warn("⚠️ [STT-CLIENT] Failed to enqueue message: result={}, queueSize={}", result, outQueue.currentSubscriberCount());
+        } else {
+            log.debug("✅ [STT-CLIENT] Message enqueued successfully");
         }
     }
 
@@ -77,23 +80,23 @@ public class SttWebSocketClient {
             return;
         }
 
-        log.info("Connecting to STT at {}", sttUrl);
+        log.info("🔗 [STT-CLIENT] Connecting to STT at {}", sttUrl);
 
         client.execute(URI.create(sttUrl), ws -> {
                 this.session = ws;
                 currentBackoffMs.set(reconnectInitialDelay.toMillis());
-                log.info("Connected to STT server: {}", sttUrl);
+                log.info("🔗 [STT-CLIENT] Connected to STT server: {}", sttUrl);
 
                 // Запуск приёма сообщений
                 return startReceiveLoop(ws)
                     .doFinally(sig -> {
-                        log.warn("STT connection closed ({}) — scheduling reconnect", sig);
+                        log.warn("⚠️ [STT-CLIENT] STT connection closed ({}) — scheduling reconnect", sig);
                         this.session = null;
                         scheduleReconnect();
                     });
             }
         ).doOnError(e -> {
-                log.error("Failed to connect to STT, scheduling reconnect", e);
+                log.error("❌ [STT-CLIENT] Failed to connect to STT, scheduling reconnect", e);
                 scheduleReconnect();
             }
         ).subscribe();
@@ -108,7 +111,7 @@ public class SttWebSocketClient {
         }
 
         final long delay = currentBackoffMs.get();
-        log.info("Reconnecting to STT in {} ms", delay);
+        log.info("🔄 [STT-CLIENT] Reconnecting to STT in {} ms", delay);
 
         Mono.delay(Duration.ofMillis(delay), Schedulers.boundedElastic())
             .then(Mono.fromRunnable(this::connect))
@@ -124,15 +127,15 @@ public class SttWebSocketClient {
         return ws.receive()
             .map(WebSocketMessage::getPayloadAsText)
             .doOnNext(msg -> {
-                log.debug("Received from STT: {}", msg);
+                log.info("📥 [STT->BACKEND] Received message from STT: length={} chars", msg.length());
                 try {
                     responseHandler.handle(msg);
                 } catch (final Exception e) {
-                    log.error("Error while handling STT message", e);
+                    log.error("❌ [STT->BACKEND] Error while handling STT message", e);
                 }
             })
             .onErrorContinue((err, obj) ->
-                log.error("Error receiving message from STT", err))
+                log.error("❌ [STT->BACKEND] Error receiving message from STT", err))
             .then();
     }
 
@@ -140,18 +143,22 @@ public class SttWebSocketClient {
      * Отправка сообщений из очереди
      */
     private void startSenderLoop() {
+        log.debug("📤 [BACKEND->STT] Sender loop has started");
         outQueue.asFlux()
             .flatMap(msg -> {
                 final WebSocketSession s = session;
                 if (s != null && s.isOpen()) {
                     return s.send(Mono.just(s.textMessage(msg)))
                         .timeout(timeout)
+                        .doOnSuccess(v -> {
+                            log.debug("✅ [BACKEND->STT] Message sent successfully");
+                        })
                         .onErrorResume(e -> {
-                            log.warn("Failed to send message to STT", e);
+                            log.warn("❌ [BACKEND->STT] Failed to send message to STT", e);
                             return Mono.empty();
                         });
                 } else {
-                    log.warn("STT session not ready — message dropped");
+                    log.warn("⚠️ [BACKEND->STT] STT session not ready — message dropped");
                     return Mono.empty();
                 }
             }, 1) // concurrency = 1 → порядок сохранён

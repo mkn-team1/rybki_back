@@ -34,10 +34,12 @@ public class IdeaExtractorClient {
     public Mono<List<Idea>> extractIdeas(String text) {
         GigaChatRequestDto request = GigaChatRequestDto.createIdeaExtractionRequest(text);
 
+        log.debug("📤 [GIGACHAT] Sending request to find ideas from: {}", text);
+
         return authService.getAccessToken()
             .flatMap(accessToken -> {
                 if (accessToken == null || accessToken.isEmpty()) {
-                    log.warn("No access token available");
+                    log.warn("❌ [GIGACHAT] No access token available");
                     return Mono.just(Collections.emptyList());
                 }
 
@@ -50,9 +52,16 @@ public class IdeaExtractorClient {
                     .retrieve()
                     .bodyToMono(GigaChatResponseDto.class)
                     .timeout(Duration.ofSeconds(30))
+                    .doOnNext(response -> {
+                        log.debug("📥 [GIGACHAT] Response: {}", response);
+                    })
                     .flatMap(this::parseResponse)
+                    .doOnSuccess(ideas -> {
+                        log.info("✅ [GIGACHAT] Extracted {} ideas", ideas.size());
+                        log.debug("📥 [GIGACHAT] Extracted ideas: {}", ideas);
+                    })
                     .onErrorResume(e -> {
-                        log.error("Failed to extract ideas", e);
+                        log.error("❌ [GIGACHAT] Request failed: {}", e.getMessage(), e);
                         return Mono.just(Collections.emptyList());
                     });
             });
@@ -74,7 +83,7 @@ public class IdeaExtractorClient {
             }
 
             if (nnResponse.ideas() == null || nnResponse.ideas().isEmpty()) {
-                log.warn("nnResponse status is success but no ideas found");
+                log.warn("⚠️ [GIGACHAT] nnResponse status is success but no ideas found");
                 return Mono.just(Collections.emptyList());
             }
 
@@ -89,7 +98,7 @@ public class IdeaExtractorClient {
             return Mono.just(ideas);
 
         } catch (JsonProcessingException e) {
-            log.error("Failed to process JSON", e);
+            log.error("❌ [GIGACHAT] Failed to process JSON", e);
             return Mono.just(Collections.emptyList());
         }
     }
