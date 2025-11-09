@@ -154,9 +154,9 @@ public record GigaChatRequestDto(
         if (text == null) {
             log.warn("⚠️ [DTO_FACTORY] Creating user message with null text");
         } else {
-            log.debug("👤 [DTO_FACTORY] Creating user message with text length: {}, preview: {}",
+            log.debug("👤 [DTO_FACTORY] Creating user message with text length: {}, text: {}",
                 text.length(),
-                text.length() > 100 ? text.substring(0, 97) + "..." : text);
+                text);
         }
         return new Message("user", text);
     }

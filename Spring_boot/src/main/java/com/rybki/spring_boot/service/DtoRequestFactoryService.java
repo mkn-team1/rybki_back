@@ -18,8 +18,8 @@ public class DtoRequestFactoryService {
     private final Queue<List<String>> foundIdeas = new LinkedList<>();
 
     public GigaChatRequestDto createIdeaExtractionRequest(final String text) {
-        log.debug("🏭 [DTO_FACTORY] Creating request for text: {}", text);
-        log.debug("📊 [DTO_FACTORY] Current context - lastMessages: {}, foundIdeas: {}",
+        log.info("🏭 [DTO_FACTORY] Creating request for text: {}", text);
+        log.info("📊 [DTO_FACTORY] Current context - lastMessages: {}, foundIdeas: {}",
             lastMessages.size(), foundIdeas.size());
 
         final List<Message> messages = new LinkedList<>();
@@ -36,7 +36,7 @@ public class DtoRequestFactoryService {
         lastMessages.add(text);
         if (lastMessages.size() > MAX_MESSAGES) {
             final String removedMessage = lastMessages.poll();
-            log.debug("🗑️ [DTO_FACTORY] Removed oldest message from context {}, current size: {}", removedMessage,
+            log.info("🗑️ [DTO_FACTORY] Removed oldest message from context {}, current size: {}", removedMessage,
                 lastMessages.size());
         }
 
@@ -47,8 +47,8 @@ public class DtoRequestFactoryService {
             0
         );
 
-        log.debug("✅ [DTO_FACTORY] Request created with {} messages total", messages.size());
-        log.debug("📝 [DTO_FACTORY] Request details - model: {}, stream: {}",
+        log.info("✅ [DTO_FACTORY] Request created with {} messages total", messages.size());
+        log.info("📝 [DTO_FACTORY] Request details - model: {}, stream: {}",
             request.model(), request.stream());
 
         return request;
@@ -56,21 +56,21 @@ public class DtoRequestFactoryService {
 
     public void addFoundIdeas(final List<String> newIdeas) {
         if (newIdeas == null || newIdeas.isEmpty()) {
-            log.debug("📭 [DTO_FACTORY] No new ideas to add - list is null or empty");
+            log.info("📭 [DTO_FACTORY] No new ideas to add - list is null or empty");
             return;
         }
 
-        log.debug("💾 [DTO_FACTORY] Adding {} new ideas to context", newIdeas.size());
-        log.debug("📊 [DTO_FACTORY] Current context size before: {}", foundIdeas.size());
-        if (!foundIdeas.isEmpty()) {
+        log.info("💾 [DTO_FACTORY] Adding {} new ideas to context", newIdeas.size());
+        log.info("📊 [DTO_FACTORY] Current context size before: {}", foundIdeas.size());
+        if (foundIdeas.size() > MAX_MESSAGES) {
             final List<String> removedIdea = foundIdeas.poll();
-            log.debug("🗑️ [DTO_FACTORY] Removed oldest idea: {}",
+            log.info("🗑️ [DTO_FACTORY] Removed oldest idea: {}",
                 removedIdea);
         }
 
         foundIdeas.add(newIdeas);
 
-        log.debug("💡 [DTO_FACTORY] Added ideas to context: {}",
+        log.info("💡 [DTO_FACTORY] Added ideas to context: {}",
             newIdeas);
 
         log.info("✅ [DTO_FACTORY] Context updated. Total ideas in memory: {}", foundIdeas.size());
