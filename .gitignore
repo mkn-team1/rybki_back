@@ -21,3 +21,5 @@ out/
 .vscode/
 *.iml
 .DS_Store
+
+audio-dumps/
