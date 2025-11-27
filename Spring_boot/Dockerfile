@@ -46,11 +46,17 @@ COPY --from=build $JAVA_HOME/lib/security/cacerts $JAVA_HOME/lib/security/cacert
 # Копируем собранный JAR
 COPY --from=build /app/build/libs/*.jar ./app.jar
 
+# Копируем keystore.p12 в контейнер
+COPY src/main/resources/keystore.p12 /app/keystore.p12
+
+# Добавляем curl для healthcheck
+RUN apk add --no-cache curl
+
 ENV JAVA_OPTS="-XX:+UseContainerSupport \
                -XX:MaxRAMPercentage=75.0 \
                -XX:+UseG1GC \
                -XX:+UseStringDeduplication"
 
-EXPOSE 8080
+EXPOSE 8080 8443
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

@@ -51,7 +51,8 @@ services:
     container_name: spring-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8080:8080"  # HTTP и WS
+      - "8443:8443"  # HTTPS и WSS
     volumes:
       - ./audio-dumps:/app/audio-dumps 
     environment:
@@ -65,6 +66,12 @@ services:
         condition: service_healthy
       stt-service:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   redis_data:

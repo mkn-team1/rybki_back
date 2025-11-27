@@ -42,6 +42,10 @@ dependencies {
     implementation 'io.github.resilience4j:resilience4j-reactor:2.2.0'  // Для реактивных потоков
     implementation 'io.github.resilience4j:resilience4j-annotations:2.2.0'  // Для аннотаций
 
+    // Встроенный Tomcat
+    implementation 'org.apache.tomcat.embed:tomcat-embed-core'
+    implementation 'org.apache.tomcat.embed:tomcat-embed-websocket'  // Для WebSocket поддержки
+
     // Метрики для Prometheus
     implementation 'io.micrometer:micrometer-registry-prometheus'  // Для интеграции с Prometheus
 
