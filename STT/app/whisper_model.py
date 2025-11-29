@@ -42,12 +42,17 @@ class WhisperManager:
         segments, info = self.model.transcribe(
             arr,
             task="transcribe",
+            vad_filter=True,
+            vad_parameters=dict(
+                min_silence_duration_ms=500,
+                threshold=0.5
+            ),
+            # no_speech_threshold=0.6
             beam_size=beam_size,
             language=lang,
-            vad_filter=False,
             condition_on_previous_text=False,
-            temperature=0.0,
-            chunk_length=CHUNK_SIZE_S
+            no_repeat_ngram_size=2,
+            temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
         )
         segs = list(segments)
         text = " ".join(s.text for s in segs).strip()

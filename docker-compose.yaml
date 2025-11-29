@@ -33,7 +33,7 @@ services:
       STT_PORT: 8081
 
       # Whisper params
-      THREADS: 4
+      THREADS: 12
       CHUNK_SIZE_S: 10
       BEAM_SIZE: 1
       COMPUTE_TYPE: int8 # "float16" for GPU or "int8" for CPU
@@ -42,7 +42,7 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
       start_period: 10s
 
   spring-backend:

@@ -90,6 +90,9 @@ class STTService:
                     buf.append(audio_bytes)
                     if buf.should_transcribe():
                         pcm = buf.pop_chunk()
+                        if pcm and not self.vad.has_speech(pcm):
+                            logger.debug(f"No speech detected for {client_id}/{event_id}, skipping transcription")
+                            continue
                         result = self.model.transcribe(pcm)
                         text = result.get("text", "").strip()
                         if text:

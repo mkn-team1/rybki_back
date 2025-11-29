@@ -156,7 +156,8 @@ def main():
         if args.model == "Vosk":
             download_vosk_models()
         elif args.model == "Whisper":
-            download_whisper_model()
+            # download_whisper_model()
+            pass
         else:
             raise ValueError(f"Unknown model type: {args.model}")
         

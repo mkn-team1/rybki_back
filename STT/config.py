@@ -9,7 +9,8 @@ MODEL = os.getenv("MODEL", "Vosk") # "Vosk" / "Whisper"
 
 VOSK_MODEL_RU = os.path.join(BASE_DIR, "models", "vosk-model-small-ru-0.22")
 VOSK_MODEL_EN = os.path.join(BASE_DIR, "models", "vosk-model-small-en-us-0.15")
-WHISPER_MODEL = os.path.join(BASE_DIR, "models", "large-v3-turbo-ct2") 
+# WHISPER_MODEL = os.path.join(BASE_DIR, "models", "large-v3-turbo-ct2") 
+WHISPER_MODEL = "small"
 
 SAMPLE_RATE = int(os.getenv("SAMPLE_RATE", "16000"))
 
