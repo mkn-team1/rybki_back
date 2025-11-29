@@ -73,5 +73,25 @@ services:
       retries: 5
       start_period: 10s
 
+  browser-bot:
+    build:
+      context: ./Browser_bot
+    container_name: browser-bot
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_QUEUE_KEY: "meeting_tasks"
+      BACKEND_BASE_URL: "http://spring-backend:8080"
+      AUDIO_WS_URL: "wss://spring-backend:8443/ws/client"
+      MAX_CONCURRENT_BOTS: 4
+    depends_on:
+      spring-backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+        
 volumes:
   redis_data:
