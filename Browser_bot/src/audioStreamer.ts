@@ -37,78 +37,100 @@ function browserSideWebRtcAudio(params: { audioWsUrl: string; botId: string }) {
     return output;
   }
 
-  let activeCleanup: (() => void) | null = null;
+  let globalCtx: AudioContext | null = null;
+  let globalProcessor: ScriptProcessorNode | null = null;
+  let globalSocket: WebSocket | null = null;
+  // Храним подключенные треки, чтобы не добавлять дубли
+  const connectedTrackIds = new Set<string>();
 
-  let ws: WebSocket | null = null;
+  function ensureGlobalPipeline() {
+     if (globalCtx && globalCtx.state !== 'closed') {
+         // Проверяем, жив ли сокет
+         if (globalSocket && (globalSocket.readyState === WebSocket.CLOSED || globalSocket.readyState === WebSocket.CLOSING)) {
+             log("Socket closed, recreating...");
+             globalSocket = null; // Пересоздастся ниже
+         }
+     } else {
+         // Инициализация контекста
+         const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+         globalCtx = new AudioCtx();
+         log("Created Global AudioContext", globalCtx!.sampleRate);
+         
+         // Создаем процессор (Микшер -> Processor -> Destination)
+         // Буфер 4096 ~ 90мс задержки, можно уменьшить до 2048
+         globalProcessor = globalCtx!.createScriptProcessor(4096, 1, 1);
+         globalProcessor.connect(globalCtx!.destination);
+         
+         globalProcessor.onaudioprocess = (ev) => {
+             if (!globalSocket || globalSocket.readyState !== WebSocket.OPEN) return;
+             
+             const input = ev.inputBuffer.getChannelData(0);
+             
+             // Простая проверка на тишину (опционально), чтобы не спамить нулями
+            //  let sum = 0;
+            //  for (let i = 0; i < input.length; i+=50) sum += Math.abs(input[i]);
+            //  if (sum < 0.001) return;
 
-  function ensureSocket() {
-      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return ws;
-      ws = new WebSocket(audioWsUrl);
-      ws.binaryType = "arraybuffer";
-      ws.onopen = () => {
-          log("WS Open");
-          ws!.send(JSON.stringify({ type: "start", clientId: "123", eventId: "456" }));
-      };
-      ws.onerror = (e) => log("WS Error", e);
-      return ws;
+             const resampled = resampleTo16k(input, globalCtx!.sampleRate);
+             const pcm16 = floatTo16BitPCM(resampled);
+             try { globalSocket.send(pcm16.buffer); } catch (e) {}
+         };
+     }
+
+     if (!globalSocket) {
+         globalSocket = new WebSocket(audioWsUrl);
+         globalSocket.binaryType = "arraybuffer";
+         globalSocket.onopen = () => {
+             log("WS Open");
+             // TODO: Передавать реальные ID если нужно
+             globalSocket!.send(JSON.stringify({ type: "start", clientId: "bot", eventId: "meeting" }));
+         };
+         globalSocket.onerror = (e) => log("WS Error", e);
+         globalSocket.onclose = (e) => log("WS Closed", e.code);
+     }
+     
+     return { ctx: globalCtx!, processor: globalProcessor! };
   }
 
-  function startWebAudio(stream: MediaStream) {
-    log("New audio track detected! ID:", stream.id);
-
-    if (activeCleanup) {
-        log("Stopping previous track processing...");
-        activeCleanup();
-        activeCleanup = null;
-    }
-
-    try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const audioCtx = new AudioCtx();
-      const source = audioCtx.createMediaStreamSource(stream);
-      const processor = audioCtx.createScriptProcessor(4096, 1, 1);
-
-      const socket = ensureSocket(); 
-
-      processor.onaudioprocess = (ev: AudioProcessingEvent) => {
-        if (!socket || socket.readyState !== WebSocket.OPEN) return;
-
-        const input = ev.inputBuffer.getChannelData(0);
-        const resampled = resampleTo16k(input, audioCtx.sampleRate);
-        const pcm16 = floatTo16BitPCM(resampled);
-        try {
-            socket.send(pcm16.buffer);
-        } catch(e) {}
-      };
-
-      source.connect(processor);
-      processor.connect(audioCtx.destination);
-
-      activeCleanup = () => {
-          log(`Cleaning up track: ${stream.id}`);
-          try { processor.disconnect(); } catch {}
-          try { source.disconnect(); } catch {}
-          try { if(audioCtx.state !== 'closed') audioCtx.close(); } catch {}
-      };
-
-      stream.getAudioTracks()[0].addEventListener("ended", () => {
-          log("Track ended naturally");
-          if (activeCleanup) activeCleanup(); 
-      });
-
-    } catch (e) {
-      log("Failed to start pipeline", e);
-    }
+  function connectTrack(track: MediaStreamTrack, streamId: string) {
+     if (connectedTrackIds.has(track.id)) return;
+     connectedTrackIds.add(track.id);
+     
+     log(`Connecting new track: ${track.id} (stream: ${streamId})`);
+     
+     try {
+         const { ctx, processor } = ensureGlobalPipeline();
+         
+         // Создаем поток только из этого трека
+         const stream = new MediaStream([track]);
+         const source = ctx.createMediaStreamSource(stream);
+         
+         // Подключаем к глобальному процессору (автоматическое микширование)
+         source.connect(processor);
+         
+         // Следим за окончанием трека
+         track.addEventListener('ended', () => {
+             log(`Track ended: ${track.id}`);
+             try { source.disconnect(); } catch {}
+             connectedTrackIds.delete(track.id);
+         });
+         
+     } catch (e) {
+         log("Failed to connect track", e);
+     }
   }
 
+  // Перехват RTCPeerConnection
   (window as any).RTCPeerConnection = function () {
     const pc = new OrigPC(...arguments);
+    
     pc.addEventListener("track", function (ev: any) {
-      
-      if (ev.track && ev.track.kind === "audio" && ev.streams && ev.streams[0]) {
-        startWebAudio(ev.streams[0]);
+      if (ev.track && ev.track.kind === "audio") {
+        // Подключаем ВСЕ входящие аудио-треки
+        connectTrack(ev.track, ev.streams[0]?.id);
       }
     });
+    
     return pc;
   };
 }
