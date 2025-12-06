@@ -3,12 +3,18 @@ package com.rybki.spring_boot.service;
 import java.time.Instant;
 import java.util.UUID;
 
-import com.rybki.spring_boot.model.domain.CreateEventRequest;
-import com.rybki.spring_boot.model.domain.CreateEventResponse;
-import com.rybki.spring_boot.model.domain.EndEventRequest;
-import com.rybki.spring_boot.model.domain.EndEventResponse;
-import com.rybki.spring_boot.model.domain.JoinEventRequest;
-import com.rybki.spring_boot.model.domain.JoinEventResponse;
+import com.rybki.spring_boot.exception.BadRequestException;
+import com.rybki.spring_boot.exception.NotFoundException;
+import com.rybki.spring_boot.model.domain.api.event.create.CreateEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.create.CreateEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.end.EndEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.end.EndEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.join.JoinEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.join.JoinEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventResponse;
 import com.rybki.spring_boot.model.domain.redis.Event;
 import com.rybki.spring_boot.model.domain.redis.EventStatus;
 import com.rybki.spring_boot.repository.RedisEventRepository;
@@ -22,6 +28,7 @@ import org.springframework.stereotype.Service;
 public class EventService {
 
     private final RedisEventRepository eventRepository;
+    private final BotService botService;
 
     public CreateEventResponse createEvent(final CreateEventRequest eventRequest) {
         final String clientId = UUID.randomUUID().toString();
@@ -52,10 +59,10 @@ public class EventService {
         log.info("Trying to join {} event with extra data {}", eventId, joinEventRequest);
 
         final Event event = eventRepository.findEventById(eventId)
-            .orElseThrow(() -> new RuntimeException("Event not found with id: " + eventId));
+            .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
 
         if (event.getStatus() == EventStatus.ENDED) {
-            throw new RuntimeException("Cannot join ended event: " + eventId);
+            throw new BadRequestException("Cannot join ended event: " + eventId);
         }
 
         String clientId = UUID.randomUUID().toString();
@@ -77,13 +84,11 @@ public class EventService {
     public EndEventResponse endEvent(final String eventId, final EndEventRequest endEventRequest) {
         log.info("Ending event: eventId={}", eventId);
 
-        // 1. ПРОВЕРЯЕМ СУЩЕСТВУЕТ ЛИ СОБЫТИЕ
         final Event event = eventRepository.findEventById(eventId)
-            .orElseThrow(() -> new RuntimeException("Event not found with id: " + eventId));
+            .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
 
-        // 2. ПРОВЕРЯЕМ ПРАВА (только создатель может завершить)
         if (!event.getCreatorClientId().equals(endEventRequest.getClientId())) {
-            throw new RuntimeException("Only event creator can end the event");
+            throw new BadRequestException("Only event creator can end the event");
         }
 
         // 3. ОБНОВЛЯЕМ СТАТУС СОБЫТИЯ В REDIS
@@ -103,6 +108,40 @@ public class EventService {
         // 5. TODO: УВЕДОМИТЬ УЧАСТНИКОВ ЧЕРЕЗ WEBSOCKET
         // websocketService.broadcastEventEnded(eventId, summary);
 
-        return new EndEventResponse(); // можно добавить поля при необходимости
+        return EndEventResponse.builder().build();
+    }
+
+    public LeaveEventResponse leaveEvent(final String eventId, final LeaveEventRequest leaveEventRequest) {
+        final String clientId = leaveEventRequest.getClientId();
+
+        log.info("Client {} leaving event {}", clientId, eventId);
+
+        final Event event = eventRepository.findEventById(eventId)
+            .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
+
+        if (!eventRepository.isParticipant(eventId, clientId)) {
+            throw new BadRequestException("Client is not a participant of the event: " + eventId);
+        }
+
+        // TODO: Сделать логику при выходе из конференции с выдачей summary
+
+        botService.handleClientLeave(eventId, clientId);
+        // eventRepository.removeParticipant(eventId, clientId);
+
+        log.info("Client {} successfully left event {}", clientId, eventId);
+
+        return LeaveEventResponse.builder().build();
+    }
+
+    public SummarizeEventResponse summarizeEvent(final String eventId,
+        final SummarizeEventRequest summarizeEventRequest) {
+        log.info("Summarizing event: eventId={}", eventId);
+
+        final Event event = eventRepository.findEventById(eventId)
+            .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
+        
+        // TODO: Собрать и вернуть сводку события
+
+        return SummarizeEventResponse.builder().build();
     }
 }

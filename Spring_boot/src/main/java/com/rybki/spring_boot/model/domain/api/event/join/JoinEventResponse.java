@@ -1,4 +1,4 @@
-package com.rybki.spring_boot.model.domain;
+package com.rybki.spring_boot.model.domain.api.event.join;
 
 import lombok.Builder;
 import lombok.Data;
