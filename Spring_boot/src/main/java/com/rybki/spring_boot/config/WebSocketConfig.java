@@ -1,12 +1,7 @@
 package com.rybki.spring_boot.config;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.rybki.spring_boot.websocket.ClientWebSocketHandler;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +11,10 @@ import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
 
+import com.rybki.spring_boot.websocket.ClientWebSocketHandler;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Configuration
@@ -26,13 +25,14 @@ public class WebSocketConfig {
 
     @Bean
     public HandlerMapping webSocketHandlerMapping() {
-        Map<String, WebSocketHandler> map = new HashMap<>();
+        final Map<String, WebSocketHandler> map = new HashMap<>();
         map.put("/ws/client", clientWebSocketHandler);
+        map.put("/event", clientWebSocketHandler);
 
-        SimpleUrlHandlerMapping handlerMapping = new SimpleUrlHandlerMapping();
+        final SimpleUrlHandlerMapping handlerMapping = new SimpleUrlHandlerMapping();
         handlerMapping.setOrder(Ordered.HIGHEST_PRECEDENCE);
         handlerMapping.setUrlMap(map);
-        
+
         return handlerMapping;
     }
 
