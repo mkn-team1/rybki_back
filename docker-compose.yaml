@@ -51,7 +51,6 @@ services:
     container_name: spring-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"  # HTTP и WS
       - "8443:8443"  # HTTPS и WSS
     volumes:
       - ./audio-dumps:/app/audio-dumps 
@@ -84,7 +83,7 @@ services:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_QUEUE_KEY: "meeting_tasks"
-      BACKEND_BASE_URL: "http://spring-backend:8080"
+      BACKEND_BASE_URL: "https://spring-backend:8443"
       AUDIO_WS_URL: "wss://spring-backend:8443/ws/client"
       MAX_CONCURRENT_BOTS: 4
     depends_on:
