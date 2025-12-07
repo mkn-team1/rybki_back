@@ -51,7 +51,6 @@ services:
     container_name: spring-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"  # HTTP и WS
       - "8443:8443"  # HTTPS и WSS
     volumes:
       - ./audio-dumps:/app/audio-dumps 
