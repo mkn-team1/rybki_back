@@ -1,123 +1,143 @@
-import axios from "axios";
-import { createClient, RedisClientType } from "redis";
+import { Kafka, Consumer } from "kafkajs";
+import Redis from "ioredis";
+import { Config, TaskSourceType } from "./config";
 import { JoinConferenceTask } from "./taskTypes";
-import { Config } from "./config";
 import { logger } from "./logger";
 
-export interface TaskSource {
+export interface ITaskSource {
   init(): Promise<void>;
   fetchNextTask(): Promise<JoinConferenceTask | null>;
-  reportTaskStarted(botId: string): Promise<void>;
-  reportTaskFinished(
-    botId: string,
-    ok: boolean,
-    errorMessage?: string
-  ): Promise<void>;
+  commitTask(task: JoinConferenceTask, success: boolean, error?: string): Promise<void>;
+  close(): Promise<void>;
 }
 
-/**
- * Источник для реальной очереди (Redis, позже можно добавить Kafka).
- * Сейчас пример с Redis — закомментирован fetchNextTask.
- */
-class RedisTaskSource implements TaskSource {
-  private redis: RedisClientType;
+// ==========================================
+// 1. KAFKA IMPLEMENTATION
+// ==========================================
+class KafkaTaskSource implements ITaskSource {
+  private kafka: Kafka;
+  private consumer: Consumer;
+  private messageBuffer: JoinConferenceTask[] = [];
 
   constructor(private cfg: Config) {
-    this.redis = createClient({ url: this.cfg.redisUrl });
-    this.redis.on("error", (err) => {
-      logger.error({ err }, "Redis client error");
+    this.kafka = new Kafka({
+      clientId: cfg.workerId,
+      brokers: cfg.kafkaBrokers,
+    });
+    this.consumer = this.kafka.consumer({ 
+        groupId: cfg.kafkaGroupId,
+        sessionTimeout: 30000 
     });
   }
 
   async init(): Promise<void> {
-    await this.redis.connect();
-    logger.info({ redisUrl: this.cfg.redisUrl }, "Connected to Redis");
+    await this.consumer.connect();
+    await this.consumer.subscribe({ topic: this.cfg.kafkaTopic, fromBeginning: false });
+
+    // Запускаем фоновый процесс вычитывания
+    this.consumer.run({
+      autoCommit: false,
+      eachBatch: async ({ batch, resolveOffset, commitOffsetsIfNecessary, heartbeat, isRunning }) => {
+        for (const message of batch.messages) {
+          if (!isRunning()) break;
+          
+          // BACKPRESSURE: Если буфер переполнен (например > 5), ждем.
+          // Это заставляет KafkaJS перестать запрашивать новые батчи у брокера.
+          while (this.messageBuffer.length >= 5 && isRunning()) {
+            await new Promise(r => setTimeout(r, 500));
+            await heartbeat(); // Важно: шлем хартбиты, чтобы брокер не выкинул нас из группы
+          }
+
+          if (message.value) {
+            try {
+              const taskPayload = JSON.parse(message.value.toString());
+              if (taskPayload.botId && taskPayload.meetingUrl) {
+                this.messageBuffer.push(taskPayload);
+                logger.info({ botId: taskPayload.botId }, "Buffered task from Kafka");
+              }
+            } catch (e) {
+              logger.error(`Error parsing Kafka msg: ${e}`);
+            }
+            
+            // Сразу помечаем сообщение как "полученное" (resolved).
+            resolveOffset(message.offset);
+          }
+        }
+        
+        // Фиксируем оффсеты в брокере после обработки (или буферизации) батча
+        await commitOffsetsIfNecessary();
+      }
+    });
+    
+    logger.info("KafkaTaskSource initialized");
   }
 
   async fetchNextTask(): Promise<JoinConferenceTask | null> {
-    try {
-      // Пример кода для продакшена (пока закомментирован):
-      //
-      // const timeoutSeconds = 5;
-      // const res = await this.redis.brPop(this.cfg.redisQueueKey, timeoutSeconds);
-      // if (!res) {
-      //   return null;
-      // }
-      // const raw = res.element;
-      // const task: JoinConferenceTask = JSON.parse(raw);
-      // return task;
-      //
-      return null;
-    } catch (err: any) {
-      logger.error({ err }, "Failed to fetch task from Redis");
-      return null;
-    }
+    return this.messageBuffer.shift() || null;
   }
 
-  async reportTaskStarted(botId: string): Promise<void> {
-    try {
-      // await axios.post(
-      //   `${this.cfg.backendBaseUrl}/api/worker/task-started`,
-      //   { botId, workerId: this.cfg.workerId }
-      // );
-    } catch (err: any) {
-      logger.error({ err, botId }, "Failed to report task started");
-    }
+  async commitTask(task: JoinConferenceTask, success: boolean, error?: string): Promise<void> {
+    // В этой модели (Commit Immediately) оффсет уже закоммичен.
+    // Здесь только логирование.
+    if (success) logger.info({ botId: task.botId }, "Kafka Task completed");
+    else logger.error({ botId: task.botId, error }, "Kafka Task failed");
   }
 
-  async reportTaskFinished(
-    botId: string,
-    ok: boolean,
-    errorMessage?: string
-  ): Promise<void> {
-    try {
-      // await axios.post(
-      //   `${this.cfg.backendBaseUrl}/api/worker/task-finished`,
-      //   { botId, workerId: this.cfg.workerId, ok, errorMessage }
-      // );
-    } catch (err: any) {
-      logger.error({ err, botId }, "Failed to report task finished");
-    }
+  async close(): Promise<void> {
+    await this.consumer.disconnect();
   }
 }
 
-/**
- * Тестовый источник: один раз возвращает захардкоженную задачу.
- * URL конференции подставишь в ENV TEST_MEETING_URL или прямо сюда.
- */
-class SingleTaskSource implements TaskSource {
-  private used = false;
+// ==========================================
+// 2. REDIS IMPLEMENTATION
+// ==========================================
+class RedisTaskSource implements ITaskSource {
+  private redis: Redis;
 
-  constructor(private cfg: Config) {}
+  constructor(private cfg: Config) {
+    this.redis = new Redis(cfg.redisUrl);
+  }
 
-  async init(): Promise<void> {}
+  async init(): Promise<void> {
+    await this.redis.ping();
+    logger.info("RedisTaskSource initialized");
+  }
 
   async fetchNextTask(): Promise<JoinConferenceTask | null> {
-    if (this.used) {
-      return null;
+    const result = await this.redis.lpop(this.cfg.redisQueueKey);
+    
+    if (result) {
+      try {
+        const task = JSON.parse(result);
+        logger.info({ botId: task.botId }, "Fetched task from Redis");
+        return task;
+      } catch (e) {
+        logger.error(`Error parsing Redis task: ${e}`);
+      }
     }
-    this.used = true;
-
-    const task: JoinConferenceTask = {
-      botId: "test-bot-1",
-      meetingUrl: "https://yo3cll2q.ktalk.ru/w894l5ok5c8j",
-      platform: "kontur_talk"
-    };
-    return task;
+    return null;
   }
 
-  async reportTaskStarted(botId: string): Promise<void> {}
+  async commitTask(task: JoinConferenceTask, success: boolean, error?: string): Promise<void> {
+    if (success) {
+        logger.info({ botId: task.botId }, "Redis Task completed");
+    } else {
+        logger.warn({ botId: task.botId, error }, "Redis Task failed");
+    }
+  }
 
-  async reportTaskFinished(
-    botId: string,
-    ok: boolean,
-    errorMessage?: string
-  ): Promise<void> {}
+  async close(): Promise<void> {
+    await this.redis.quit();
+  }
 }
 
-/**
- * Фабрика источников задач.
- */
-export function createTaskSource(cfg: Config): TaskSource {
-    return new SingleTaskSource(cfg);
+export function createTaskSource(cfg: Config): ITaskSource {
+  switch (cfg.taskSourceType) {
+    case "kafka":
+      return new KafkaTaskSource(cfg);
+    case "redis":
+      return new RedisTaskSource(cfg);
+    default:
+      throw new Error(`Unknown task source type: ${cfg.taskSourceType}`);
+  }
 }
