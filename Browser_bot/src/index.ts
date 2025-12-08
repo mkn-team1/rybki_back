@@ -34,6 +34,12 @@ async function runBot(task: JoinConferenceTask): Promise<void> {
   page.on("console", (msg) => {
     const text = msg.text();
 
+    if (text.includes("[BOT_COMMAND:LEAVE]")) {
+        logger.info({ botId: task.botId }, "Received LEAVE command, aborting task...");
+        abortController.abort();
+        return;
+    }
+
     if (text.startsWith("[audio-bot]")) {
       logger.info(
         { botId: task.botId, type: msg.type() },
