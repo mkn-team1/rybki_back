@@ -5,5 +5,5 @@ import lombok.Data;
 @Data
 public class EndEventRequest {
     
-    private String clientId;
+    private String conferenceId;
 }

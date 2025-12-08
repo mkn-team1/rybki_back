@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 @Builder
 public class CreateEventResponse {
-    private String clientId;
+    private String conferenceId;
+    private String eventName;
     private String eventId;
 }

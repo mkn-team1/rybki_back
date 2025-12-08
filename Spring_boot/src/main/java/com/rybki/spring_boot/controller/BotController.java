@@ -4,8 +4,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.rybki.spring_boot.model.domain.api.bot.create.CreateBotRequest;
-import com.rybki.spring_boot.model.domain.api.bot.create.CreateBotResponse;
 import com.rybki.spring_boot.model.domain.api.bot.removed.RemovedBotRequest;
 import com.rybki.spring_boot.model.domain.api.bot.removed.RemovedBotResponse;
 import com.rybki.spring_boot.model.domain.api.bot.started.StartedBotRequest;
@@ -30,20 +28,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 public class BotController {
 
     private final BotService botService;
-    
-    // Создать бота для конференции
-    @PostMapping("/create")
-    @Operation(summary = "Create Bot", description = "Creates new bot for conference")
-    @ApiResponse(responseCode = "200", description = "Bot Created")
-    @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
-    @ApiResponse(responseCode = "422", description = "Unprocessable Entity - wrong url format")
-    @ApiResponse(responseCode = "500", description = "Internal Server Error")
-    public ResponseEntity<CreateBotResponse> createBot(
-        final @RequestBody @Valid CreateBotRequest createBotRequest) {
-
-        CreateBotResponse response = botService.createBot(createBotRequest);
-        return ResponseEntity.ok(response);
-    }
 
     // Уведомление о старте бота
     @PostMapping("/{botId}/started")

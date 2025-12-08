@@ -4,6 +4,6 @@ import lombok.Data;
 
 @Data
 public class CreateEventRequest {
-
+    private String eventName;
 }
 

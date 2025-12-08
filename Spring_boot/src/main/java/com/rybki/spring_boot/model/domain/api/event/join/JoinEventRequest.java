@@ -4,5 +4,5 @@ import lombok.Data;
 
 @Data
 public class JoinEventRequest {
-
+    private String conferenceName;
 }

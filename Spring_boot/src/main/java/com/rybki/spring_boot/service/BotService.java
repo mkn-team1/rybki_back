@@ -8,8 +8,6 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rybki.spring_boot.exception.BadRequestException;
 import com.rybki.spring_boot.exception.NotFoundException;
-import com.rybki.spring_boot.model.domain.api.bot.create.CreateBotRequest;
-import com.rybki.spring_boot.model.domain.api.bot.create.CreateBotResponse;
 import com.rybki.spring_boot.model.domain.api.bot.removed.RemovedBotRequest;
 import com.rybki.spring_boot.model.domain.api.bot.removed.RemovedBotResponse;
 import com.rybki.spring_boot.model.domain.api.bot.started.StartedBotRequest;
@@ -34,15 +32,12 @@ public class BotService {
     // private final KafkaRepository kafkaRepository;
     // private final BotTaskProducer botTaskProducer;
 
-    public CreateBotResponse createBot(final CreateBotRequest createBotRequest) {
-        final String clientId = createBotRequest.getClientId();
-        final String eventId = createBotRequest.getEventId();
-        final String meetingUrl = createBotRequest.getMeetingUrl();
+    public void createBot(final String conferenceId, final String eventId, final String meetingUrl) {
 
         final Event event = eventRepository.findEventById(eventId)
             .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
 
-        if (!eventRepository.isParticipant(eventId, clientId)) {
+        if (!eventRepository.isParticipant(eventId, conferenceId)) {
             throw new BadRequestException("Client is not a participant of the event: " + eventId);
         }
         
@@ -54,12 +49,11 @@ public class BotService {
 
         final String botId = UUID.randomUUID().toString();
 
-        // clientBotService.registerBotForClient(clientId, botId);
+        // clientBotService.registerBotForClient(conferenceId, botId);
 
         // final CreateBotTask createBotTask = botTaskProducer.createBotTask(botId, meetingUrl);
         // botTaskProducer.sendCreateBotTask(createBotTask); или kafkaRepository.sendCreateBotTask(createBotTask);
 
-        return CreateBotResponse.builder().build();
     }
 
     public StartedBotResponse handleBotStarted(final String botId, final StartedBotRequest startedBotRequest) {
@@ -90,17 +84,17 @@ public class BotService {
         return RemovedBotResponse.builder().build();
     }
 
-    public void handleClientLeave(final String eventId, final String clientId) {
+    public void handleClientLeave(final String eventId, final String conferenceId) {
         final Event event = eventRepository.findEventById(eventId)
             .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
 
-        if (!eventRepository.isParticipant(eventId, clientId)) {
+        if (!eventRepository.isParticipant(eventId, conferenceId)) {
             throw new BadRequestException("Client is not a participant of the event: " + eventId);
         }
 
         // TODO: дописать логику поиска и удаления бота, связанного с клиентом
 
-        // final String botId = clientBotService.getBotIdForClient(clientId);
+        // final String botId = clientBotService.getBotIdForClient(conferenceId);
         // if (botId != null) {
         //     removeBot(botId);
         // }

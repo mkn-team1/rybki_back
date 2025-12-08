@@ -31,27 +31,29 @@ public class EventService {
     private final BotService botService;
 
     public CreateEventResponse createEvent(final CreateEventRequest eventRequest) {
-        final String clientId = UUID.randomUUID().toString();
+        final String conferenceId = UUID.randomUUID().toString();
         final String eventId = UUID.randomUUID().toString();
 
-        log.info("Creating new event: eventId={}, creatorId={}", eventId, clientId);
+        log.info("Creating new event: eventId={}, conferenceId={}", eventId, conferenceId);
 
         final Event event = Event.builder()
             .eventId(eventId)
-            .creatorClientId(clientId)
+            .creatorConferenceId(conferenceId)
+            .eventName(eventRequest.getEventName())
             .status(EventStatus.ACTIVE)
             .createdAt(Instant.now())
             .build();
 
         eventRepository.createEvent(event);
 
-        eventRepository.addParticipant(eventId, clientId);
+        eventRepository.addParticipant(eventId, conferenceId);
 
         log.info("Event created successfully: eventId={}", eventId);
 
         return CreateEventResponse.builder()
-            .clientId(clientId)
+            .conferenceId(conferenceId)
             .eventId(eventId)
+            .eventName(eventRequest.getEventName())
             .build();
     }
 
@@ -65,19 +67,21 @@ public class EventService {
             throw new BadRequestException("Cannot join ended event: " + eventId);
         }
 
-        String clientId = UUID.randomUUID().toString();
+        String conferenceId = UUID.randomUUID().toString();
 
-        while (eventRepository.isParticipant(eventId, clientId)) {
-            clientId = UUID.randomUUID().toString();
+        while (eventRepository.isParticipant(eventId, conferenceId)) {
+            conferenceId = UUID.randomUUID().toString();
         }
 
-        eventRepository.addParticipant(eventId, clientId);
+        eventRepository.addParticipant(eventId, conferenceId);
 
-        log.info("Client {} successfully joined event {}", clientId, eventId);
+        log.info("Client {} successfully joined event {}", conferenceId, eventId);
 
         return JoinEventResponse.builder()
             .eventId(eventId)
-            .clientId(clientId)
+            .eventName(event.getEventName())
+            .conferenceId(conferenceId)
+            .conferenceName(joinEventRequest.getConferenceName())
             .build();
     }
 
@@ -87,7 +91,7 @@ public class EventService {
         final Event event = eventRepository.findEventById(eventId)
             .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
 
-        if (!event.getCreatorClientId().equals(endEventRequest.getClientId())) {
+        if (!event.getCreatorConferenceId().equals(endEventRequest.getConferenceId())) {
             throw new BadRequestException("Only event creator can end the event");
         }
 
@@ -112,23 +116,23 @@ public class EventService {
     }
 
     public LeaveEventResponse leaveEvent(final String eventId, final LeaveEventRequest leaveEventRequest) {
-        final String clientId = leaveEventRequest.getClientId();
+        final String conferenceId = leaveEventRequest.getConferenceId();
 
-        log.info("Client {} leaving event {}", clientId, eventId);
+        log.info("Client {} leaving event {}", conferenceId, eventId);
 
         final Event event = eventRepository.findEventById(eventId)
             .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
 
-        if (!eventRepository.isParticipant(eventId, clientId)) {
+        if (!eventRepository.isParticipant(eventId, conferenceId)) {
             throw new BadRequestException("Client is not a participant of the event: " + eventId);
         }
 
         // TODO: Сделать логику при выходе из конференции с выдачей summary
 
-        botService.handleClientLeave(eventId, clientId);
-        // eventRepository.removeParticipant(eventId, clientId);
+        botService.handleClientLeave(eventId, conferenceId);
+        // eventRepository.removeParticipant(eventId, conferenceId);
 
-        log.info("Client {} successfully left event {}", clientId, eventId);
+        log.info("Client {} successfully left event {}", conferenceId, eventId);
 
         return LeaveEventResponse.builder().build();
     }
