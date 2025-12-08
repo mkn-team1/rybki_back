@@ -7,7 +7,6 @@ import { logger } from "./logger";
 export interface ITaskSource {
   init(): Promise<void>;
   fetchNextTask(): Promise<JoinConferenceTask | null>;
-  commitTask(task: JoinConferenceTask, success: boolean, error?: string): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -76,13 +75,6 @@ class KafkaTaskSource implements ITaskSource {
     return this.messageBuffer.shift() || null;
   }
 
-  async commitTask(task: JoinConferenceTask, success: boolean, error?: string): Promise<void> {
-    // В этой модели (Commit Immediately) оффсет уже закоммичен.
-    // Здесь только логирование.
-    if (success) logger.info({ botId: task.botId }, "Kafka Task completed");
-    else logger.error({ botId: task.botId, error }, "Kafka Task failed");
-  }
-
   async close(): Promise<void> {
     await this.consumer.disconnect();
   }
@@ -116,14 +108,6 @@ class RedisTaskSource implements ITaskSource {
       }
     }
     return null;
-  }
-
-  async commitTask(task: JoinConferenceTask, success: boolean, error?: string): Promise<void> {
-    if (success) {
-        logger.info({ botId: task.botId }, "Redis Task completed");
-    } else {
-        logger.warn({ botId: task.botId, error }, "Redis Task failed");
-    }
   }
 
   async close(): Promise<void> {

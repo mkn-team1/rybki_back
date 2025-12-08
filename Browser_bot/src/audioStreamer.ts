@@ -80,11 +80,7 @@ function browserSideWebRtcAudio(params: { audioWsUrl: string; botId: string }) {
      if (!globalSocket) {
          globalSocket = new WebSocket(audioWsUrl);
          globalSocket.binaryType = "arraybuffer";
-         globalSocket.onopen = () => {
-             log("WS Open");
-             // TODO: Передавать реальные ID если нужно
-             globalSocket!.send(JSON.stringify({ type: "start", clientId: "bot", eventId: "meeting" }));
-         };
+         globalSocket.onopen = () => console.log("[audio-bot] WS Open");
 
          globalSocket.onmessage = (event) => {
             try {

@@ -80,11 +80,10 @@ services:
     ports:
       - "9000:9000"
     environment:
-      REDIS_HOST: ${REDIS_HOST}
-      REDIS_PORT: ${REDIS_PORT}
+      REDIS_URL: "redis://${REDIS_PORT}:${REDIS_PORT}"
       REDIS_QUEUE_KEY: "meeting_tasks"
-      BACKEND_BASE_URL: "https://spring-backend:8443"
-      AUDIO_WS_URL: "wss://spring-backend:8443/ws/client"
+      BACKEND_REST_URL: "https://spring-backend:8443"
+      AUDIO_WS_URL: "wss://spring-backend:8443/ws/bot"
       MAX_CONCURRENT_BOTS: 4
     depends_on:
       spring-backend:
