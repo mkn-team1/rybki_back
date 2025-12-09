@@ -24,7 +24,6 @@ public class SessionService {
     private final ConcurrentMap<String, String> clientToBot = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String> botToClient = new ConcurrentHashMap<>();
 
-
     // client logic
 
     public Mono<Void> register(WebSocketSession session, String clientId, String eventId) {
@@ -51,11 +50,10 @@ public class SessionService {
             .filter(cs -> cs.eventId().equals(eventId)));
     }
 
-    public Mono<WebSocketSession> getClientSession(String clientId, String eventId) {
+    public Mono<ClientSession> getClientSession(String clientId) {
         return Mono.justOrEmpty(
             clientSessions.values().stream()
-                .filter(cs -> cs.clientId().equals(clientId) && cs.eventId().equals(eventId))
-                .map(ClientSession::session)
+                .filter(cs -> cs.clientId().equals(clientId))
                 .findFirst()
         );
     }
