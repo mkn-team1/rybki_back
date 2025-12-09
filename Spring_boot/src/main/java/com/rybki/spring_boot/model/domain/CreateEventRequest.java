@@ -6,6 +6,5 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 @Data
 public class CreateEventRequest {
-
+    private String eventName;
 }
-

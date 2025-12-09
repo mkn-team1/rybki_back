@@ -1,5 +1,10 @@
 package com.rybki.spring_boot.model.domain;
 
-public class JoinEventRequest {
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
 
+@RequiredArgsConstructor
+@Data
+public class JoinEventRequest {
+    private String conferenceName;
 }
