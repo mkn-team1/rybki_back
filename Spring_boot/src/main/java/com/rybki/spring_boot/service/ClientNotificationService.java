@@ -23,6 +23,15 @@ public class ClientNotificationService {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
+     * Send a new idea to a specific client (not broadcast to all)
+     */
+    public Mono<Void> sendIdeaToClient(final String conferenceId, final String eventId, final Idea idea) {
+        return sendToClient(conferenceId, eventId, Map.of(
+                "type", "idea",
+                "idea", idea));
+    }
+
+    /**
      * Broadcast a new idea to all connected clients for an event
      */
     public Mono<Void> broadcastIdea(final String conferenceId, final String eventId, final Idea idea) {
@@ -71,24 +80,20 @@ public class ClientNotificationService {
     }
 
     /**
-     * Broadcast bot connection to all connected clients for an event
+     * Send bot connection notification to a specific client
      */
-    public Mono<Void> broadcastBotConnected(final String conferenceId, final String eventId, final String botId) {
-        return broadcastToEvent(eventId, Map.of(
+    public Mono<Void> botConnected(final String conferenceId, final String eventId, final String botId) {
+        return sendToClient(conferenceId, eventId, Map.of(
                 "type", "bot_connected",
-                "conferenceId", conferenceId,
-                "eventId", eventId,
                 "botId", botId));
     }
 
     /**
-     * Broadcast bot disconnection to all connected clients for an event
+     * Send bot disconnection notification to a specific client
      */
-    public Mono<Void> broadcastBotDisconnected(final String conferenceId, final String eventId, final String botId) {
-        return broadcastToEvent(eventId, Map.of(
+    public Mono<Void> botDisconnected(final String conferenceId, final String eventId, final String botId) {
+        return sendToClient(conferenceId, eventId, Map.of(
                 "type", "bot_disconnected",
-                "conferenceId", conferenceId,
-                "eventId", eventId,
                 "botId", botId));
     }
 

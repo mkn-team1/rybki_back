@@ -93,7 +93,7 @@ public class IdeaService {
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
-                .then(clientNotificationService.broadcastIdea(conferenceId, eventId, idea))
+                .then(clientNotificationService.sendIdeaToClient(conferenceId, eventId, idea))
                 .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front: ideaId={}", idea.getIdeaId()));
     }
 
@@ -105,21 +105,38 @@ public class IdeaService {
     public Mono<Void> reactToIdea(String conferenceId, String eventId, String ideaId, String reaction) {
         return Mono.fromCallable(() -> ideaRepository.findIdeaById(ideaId))
                 .flatMap(ideaOpt -> {
-                    if (ideaOpt.isPresent()) {
-                        final com.rybki.spring_boot.model.domain.redis.Idea r = ideaOpt.get();
-                        if ("like".equals(reaction)) {
-                            r.setLikes(r.getLikes() != null ? r.getLikes() + 1 : 1);
-                        } else if ("dislike".equals(reaction)) {
-                            r.setDislikes(r.getDislikes() != null ? r.getDislikes() + 1 : 1);
-                        }
-                        ideaRepository.saveIdea(r);
-                        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, likes={}, dislikes={}",
-                                ideaId, reaction, r.getLikes(), r.getDislikes());
-                        return clientNotificationService.broadcastIdeaReaction(conferenceId, eventId, ideaId,
-                                reaction, r.getLikes(), r.getDislikes());
+                    if (ideaOpt.isEmpty()) {
+                        return Mono.empty();
                     }
-                    return Mono.empty();
+                    final com.rybki.spring_boot.model.domain.redis.Idea r = ideaOpt.get();
+                    if ("accept".equals(reaction)) {
+                        return handleAcceptReaction(conferenceId, eventId, ideaId, r);
+                    } else {
+                        return handleLikeDislikeReaction(conferenceId, eventId, ideaId, reaction, r);
+                    }
                 });
+    }
+
+    private Mono<Void> handleAcceptReaction(String conferenceId, String eventId, String ideaId,
+            com.rybki.spring_boot.model.domain.redis.Idea idea) {
+        idea.setStatus(IdeaStatus.ACCEPTED);
+        return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
+                .then(clientNotificationService.broadcastIdea(conferenceId, eventId, idea))
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea accepted and broadcast: ideaId={}", ideaId));
+    }
+
+    private Mono<Void> handleLikeDislikeReaction(String conferenceId, String eventId, String ideaId,
+            String reaction, com.rybki.spring_boot.model.domain.redis.Idea idea) {
+        if ("like".equals(reaction)) {
+            idea.setLikes(idea.getLikes() != null ? idea.getLikes() + 1 : 1);
+        } else if ("dislike".equals(reaction)) {
+            idea.setDislikes(idea.getDislikes() != null ? idea.getDislikes() + 1 : 1);
+        }
+        ideaRepository.saveIdea(idea);
+        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, likes={}, dislikes={}",
+                ideaId, reaction, idea.getLikes(), idea.getDislikes());
+        return clientNotificationService.broadcastIdeaReaction(conferenceId, eventId, ideaId,
+                reaction, idea.getLikes(), idea.getDislikes());
     }
 
     public Mono<List<com.rybki.spring_boot.model.domain.redis.Idea>> getIdeasForEvent(String eventId) {
