@@ -24,7 +24,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private final SessionService sessionService;
     private final SttRoutingService sttRoutingService;
     private final VoteService voteService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     public @NotNull Mono<Void> handle(@NotNull final WebSocketSession session) {
