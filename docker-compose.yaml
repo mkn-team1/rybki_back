@@ -1,4 +1,58 @@
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: kafka
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./kafka-init.sh:/tmp/kafka-init.sh
+    command: bash /tmp/kafka-init.sh
+    restart: "no"
+
   redis:
     image: redis:7.2.4-alpine
     container_name: redis
@@ -45,6 +99,20 @@ services:
       retries: 10
       start_period: 10s
 
+  bot-consumer:
+    build:
+      context: ./Bot_Consumer
+    container_name: bot-consumer
+    restart: unless-stopped
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      BACKEND_BASE_URL: http://spring-backend:8080
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      spring-backend:
+        condition: service_healthy
+
   spring-backend:
     build:
       context: ./Spring_boot
@@ -61,10 +129,13 @@ services:
       GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
       STT_URL: ${STT_URL}
       AUDIO_DUMP_ENABLED: true
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       redis:
         condition: service_healthy
       stt-service:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/actuator/health"]
@@ -92,6 +163,5 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-        
 volumes:
   redis_data:
