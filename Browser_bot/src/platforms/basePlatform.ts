@@ -1,6 +1,7 @@
 import { Page } from "playwright";
 import { JoinConferenceTask } from "../taskTypes";
 import axios from "axios";
+import https from "https";
 import { logger } from "../logger";
 import { installWebRtcAudioHook } from "../audioStreamer";
 import { loadConfig } from "../config";
@@ -8,6 +9,15 @@ import { loadConfig } from "../config";
 const cfg = loadConfig();
 
 type notifyBackendStatus = "started" | "removed"
+
+// Агент, который игнорирует ошибки сертификатов
+const httpsAgent = new https.Agent({  
+  rejectUnauthorized: false
+});
+
+const apiClient = axios.create({
+  httpsAgent: httpsAgent
+});
 
 export abstract class BasePlatformConnector {
   abstract platformName: string;
@@ -79,8 +89,7 @@ export abstract class BasePlatformConnector {
 
   private async notifyBackend(botId: string, status: notifyBackendStatus) {
       try {
-          
-          await axios.post(`${cfg.backendRestUrl}/bot/${botId}/${status}`);
+          await apiClient.post(`${cfg.backendRestUrl}/bot/${botId}/${status}`);
       } catch (e) {
           logger.warn({ botId, status, err: e }, "Failed to send status update");
       }
