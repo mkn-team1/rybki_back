@@ -17,7 +17,15 @@ import reactor.core.publisher.Mono;
 @Service
 public class SessionService {
 
-    private final ConcurrentMap<String, ClientSession> sessions = new ConcurrentHashMap<>();
+    // sessionId -> ClientSession
+    private final ConcurrentMap<String, ClientSession> clientSessions = new ConcurrentHashMap<>();
+
+    // botId -> WebSocketSession
+    private final ConcurrentMap<String, WebSocketSession> botSessions = new ConcurrentHashMap<>();
+
+    // clientId <-> botId
+    private final ConcurrentMap<String, String> clientToBot = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, String> botToClient = new ConcurrentHashMap<>();
 
     // Регистрирует новую WS-сессию
     public Mono<Void> register(final WebSocketSession session, final String conferenceId,
@@ -28,24 +36,23 @@ public class SessionService {
     public Mono<Void> register(final WebSocketSession session, final String conferenceId,
             final String conferenceName, final String eventId) {
         return Mono.fromRunnable(() -> {
-            sessions.put(session.getId(),
+            clientSessions.put(session.getId(),
                     new ClientSession(conferenceId, conferenceName, eventId, session));
             log.debug("Registered session: sessionId={}, conferenceId={}, eventId={}",
                     session.getId(), conferenceId, eventId);
+
         });
     }
 
-    // Удаляет WS-сессию
-    public Mono<Void> unregister(final WebSocketSession session) {
+    public Mono<Void> unregister(WebSocketSession session) {
         return Mono.fromRunnable(() -> {
-            sessions.remove(session.getId());
-            log.debug("Unregistered session: sessionId={}", session.getId());
+            clientSessions.remove(session.getId());
+            log.debug("Client unregistered: sessionId={}", session.getId());
         });
     }
 
-    // Получить clientId и eventId сразу
-    public Mono<ClientSession> getSessionData(final WebSocketSession session) {
-        return Mono.justOrEmpty(sessions.get(session.getId()));
+    public Mono<ClientSession> getSessionData(WebSocketSession session) {
+        return Mono.justOrEmpty(clientSessions.get(session.getId()));
     }
 
     // Получить все сессии для конкретного event
@@ -63,5 +70,52 @@ public class SessionService {
                         .filter(cs -> cs.eventId().equals(eventId) && cs.conferenceId().equals(conferenceId))
                         .map(ClientSession::session)
                         .findFirst());
+
+     public Mono<ClientSession> getClientSession(String clientId) {
+        return Mono.justOrEmpty(
+                clientSessions.values().stream()
+                        .filter(cs -> cs.clientId().equals(clientId))
+                        .findFirst());
+    }
+
+    }
+
+    // bot logic
+
+    public Mono<Void> registerBot(String botId, WebSocketSession session) {
+        return Mono.fromRunnable(() -> {
+            botSessions.put(botId, session);
+            log.debug("Bot registered: botId={}, sessionId={}", botId, session.getId());
+        });
+    }
+
+    public Mono<Void> unregisterBot(String botId) {
+        return Mono.fromRunnable(() -> {
+            botSessions.remove(botId);
+            String clientId = botToClient.remove(botId);
+            if (clientId != null) {
+                clientToBot.remove(clientId);
+            }
+            log.debug("Bot unregistered: botId={}", botId);
+        });
+    }
+
+    public WebSocketSession getBotSession(String botId) {
+        return botSessions.get(botId);
+    }
+
+    // linking client <-> bot
+
+    public void linkClientAndBot(String clientId, String botId) {
+        clientToBot.put(clientId, botId);
+        botToClient.put(botId, clientId);
+    }
+
+    public String getBotForClient(String clientId) {
+        return clientToBot.get(clientId);
+    }
+
+    public String getClientForBot(String botId) {
+        return botToClient.get(botId);
     }
 }

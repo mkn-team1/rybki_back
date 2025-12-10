@@ -1,5 +1,7 @@
 package com.rybki.spring_boot.controller;
 
+import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.log;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,8 +20,10 @@ import reactor.core.publisher.Mono;
 @RestController
 @RequestMapping("/bot")
 @RequiredArgsConstructor
+
 @Slf4j
 @Tag(name = "Bot API", description = "Bot notifications and management")
+
 public class BotController {
 
     private final BotService botService;
@@ -98,5 +102,6 @@ public class BotController {
                             botId, e.getMessage());
                     return Mono.just(ResponseEntity.internalServerError().build());
                 });
+
     }
 }

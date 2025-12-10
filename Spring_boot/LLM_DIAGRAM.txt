@@ -1,0 +1,162 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                        LLM ABSTRACTION ARCHITECTURE                            ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            APPLICATION LAYER                                    │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌──────────────────┐        ┌──────────────────┐                              │
+│  │ IdeaService      │        │ IdeaController   │                              │
+│  └────────┬─────────┘        └──────┬───────────┘                              │
+│           │                         │                                           │
+│           └─────────────┬───────────┘                                           │
+│                         │                                                       │
+│                  ┌──────▼──────────┐                                            │
+│                  │ IdeaExtractor   │                                            │
+│                  │ Client          │                                            │
+│                  └────────┬────────┘                                            │
+└───────────────────────────┼────────────────────────────────────────────────────┘
+                            │
+                ┌───────────▼────────────┐
+                │ LlmRequestFactory      │
+                │ Service                │
+                │                        │
+                │ • createRequest()      │
+                │ • addFoundIdeas()      │
+                └───────────┬────────────┘
+                            │
+        ┌───────────────────┼───────────────────┐
+        │                   │                   │
+        │          Creates  │                   │
+        ▼          LlmRequest                  │
+  ┌─────────────────────────────────────┐      │
+  │     CONTRACT (Interfaces)           │      │
+  │                                     │      │
+  │  ┌─────────────────────────────┐    │      │
+  │  │ LlmAuthProvider             │    │      │
+  │  │ • getAccessToken()          │    │      │
+  │  │ • refreshToken()            │    │      │
+  │  └─────────────────────────────┘    │      │
+  │                                     │      │
+  │  ┌─────────────────────────────┐    │      │
+  │  │ LlmClient                   │    │      │
+  │  │ • sendRequest(request)      │◄───┴──────┘
+  │  │ • getProviderName()         │    │
+  │  └─────────────────────────────┘    │
+  │                                     │
+  │  ┌─────────────────────────────┐    │
+  │  │ LlmRequest                  │    │
+  │  │ • getMessages()             │◄───┴──────┐
+  │  │ • getGenerationParams()     │           │
+  │  └─────────────────────────────┘           │
+  │                                     │      │
+  │  ┌─────────────────────────────┐    │      │
+  │  │ LlmResponse                 │    │      │
+  │  │ • getContent()              │    │      │
+  │  │ • getModel()                │    │      │
+  │  │ • getUsageInfo()            │    │      │
+  │  └─────────────────────────────┘    │      │
+  │                                     │      │
+  └─────────────────────────────────────┘      │
+                    │                          │
+        ┌───────────▼──────────┬────────────┬──┘
+        │                      │            │
+        │           Implements  │            │
+        ▼                       ▼            ▼
+┌──────────────────┐   ┌──────────────────┐
+│ GigaChat         │   │ [Future]         │
+│ Implementation   │   │ OpenAI           │
+├──────────────────┤   │ Claude           │
+│                  │   │ Llama            │
+│ • GigaChatAuth   │   │ etc.             │
+│   Provider       │   │                  │
+│                  │   │ (Easy to add!)   │
+│ • GigaChatLlm    │   │                  │
+│   Client         │   │                  │
+│                  │   │                  │
+│ • dto/           │   │                  │
+│   - Request      │   │                  │
+│   - Response     │   │                  │
+│   - Token        │   │                  │
+│                  │   │                  │
+└────────┬─────────┘   └──────────────────┘
+         │
+         │ Makes API calls to
+         ▼
+    GigaChat API
+    (OAuth + Chat)
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                           REQUEST/RESPONSE FLOW                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+1. TEXT INPUT
+   │
+   ▼
+2. LlmRequestFactoryService.createIdeaExtractionRequest()
+   │ Returns: LlmRequest (interface)
+   │
+   ▼
+3. IdeaExtractorClient.extractIdeas()
+   │
+   ├─► GigaChatAuthProvider.getAccessToken()
+   │   │ Returns: Mono<String>
+   │   └─► GigaChatLlmClient.sendRequest(LlmRequest)
+   │
+   ▼
+4. GigaChatLlmClient
+   │
+   ├─► Converts LlmRequest → GigaChatRequestPayload
+   ├─► Sends to GigaChat API
+   ├─► Receives GigaChatResponseDto
+   └─► Wraps in LlmResponse (interface)
+       │ Returns: Mono<LlmResponse>
+       │
+       ▼
+5. IdeaExtractorClient
+   │
+   ├─► Parses LlmResponse.getContent()
+   ├─► Extracts JSON with ideas
+   ├─► Creates Idea domain objects
+   └─► Saves to context via LlmRequestFactoryService.addFoundIdeas()
+       │ Returns: Mono<List<Idea>>
+       │
+       ▼
+6. IDEA OBJECTS (Domain Model)
+   │
+   ▼
+7. IdeaService stores/processes ideas
+
+
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                          BENEFITS & KEY POINTS                                 ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+✓ Loose Coupling
+  - Application depends on interfaces, not concrete classes
+  - Easy to swap implementations
+
+✓ Extensibility  
+  - Add new providers without changing existing code
+  - Each provider is self-contained in its own package
+
+✓ Testability
+  - Mock implementations for unit tests
+  - No need to call real APIs
+
+✓ Single Responsibility
+  - Contracts: Define "what" (interfaces)
+  - GigaChat: Implement "how" for GigaChat
+  - RequestFactory: Manage request building
+  - Client: Handle transport & parsing
+
+✓ Open/Closed Principle
+  - Open for extension (new providers)
+  - Closed for modification (existing code unchanged)
+
+✓ Dependency Injection
+  - Spring manages implementation selection
+  - Easy to configure via properties
+

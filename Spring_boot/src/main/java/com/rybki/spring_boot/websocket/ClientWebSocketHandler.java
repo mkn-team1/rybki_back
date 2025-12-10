@@ -34,10 +34,12 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private final SessionService sessionService;
     private final SttRoutingService sttRoutingService;
     private final VoteService voteService;
+
     private final IdeaService ideaService;
     private final BotService botService;
     private final BotKafkaService botKafkaService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
     private final AudioDumpService audioDumpService;
 
     @Override
@@ -140,7 +142,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                     final JsonNode dataNode = jsonNode.path("data");
                     final String ideaTitle = dataNode.path("title").asText();
                     final String ideaDescription = dataNode.path("description").asText("");
-                    
+
                     if (!StringUtils.hasText(ideaTitle)) {
                         log.warn("Empty idea title: conferenceId={}, eventId={}", cs.conferenceId(), cs.eventId());
                         return Mono.<Void>empty();
@@ -203,7 +205,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                     final String botId = java.util.UUID.randomUUID().toString();
 
                     // Регистрируем связь botId -> conferenceId + eventId
-                    botService.registerBot(botId, cs.conferenceId(), cs.eventId());
+                    botService.createBot(platform, botId, botId);
 
                     log.info("Connect bot request: conferenceId={}, eventId={}, botId={}, talkLink={}, platform={}",
                             cs.conferenceId(), cs.eventId(), botId, talkLink, platform);
