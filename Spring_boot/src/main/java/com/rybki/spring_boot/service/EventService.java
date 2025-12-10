@@ -103,6 +103,7 @@ public class EventService {
         }
 
         eventRepository.deleteEvent(eventId);
+
         // 4. СОБИРАЕМ СТАТИСТИКУ ИЗ REDIS
         final int participantCount = eventRepository.getParticipants(eventId).size();
 

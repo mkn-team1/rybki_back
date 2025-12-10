@@ -12,6 +12,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rybki.spring_boot.service.AudioDumpService;
+import com.rybki.spring_boot.service.BotKafkaService;
 import com.rybki.spring_boot.service.BotService;
 import com.rybki.spring_boot.service.IdeaService;
 import com.rybki.spring_boot.service.SessionService;
@@ -36,6 +37,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
 
     private final IdeaService ideaService;
     private final BotService botService;
+    private final BotKafkaService botKafkaService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final AudioDumpService audioDumpService;
@@ -137,15 +139,18 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private Mono<Void> handleCreateIdea(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
                 .flatMap(cs -> {
-                    final String ideaContent = jsonNode.path("content").asText();
-                    if (!StringUtils.hasText(ideaContent)) {
-                        log.warn("Empty idea content: conferenceId={}, eventId={}", cs.conferenceId(), cs.eventId());
+                    final JsonNode dataNode = jsonNode.path("data");
+                    final String ideaTitle = dataNode.path("title").asText();
+                    final String ideaDescription = dataNode.path("description").asText("");
+
+                    if (!StringUtils.hasText(ideaTitle)) {
+                        log.warn("Empty idea title: conferenceId={}, eventId={}", cs.conferenceId(), cs.eventId());
                         return Mono.<Void>empty();
                     }
-                    log.info("Create idea: conferenceId={}, eventId={}, content={}", cs.conferenceId(), cs.eventId(),
-                            ideaContent);
+                    log.info("Create idea: conferenceId={}, eventId={}, title={}", cs.conferenceId(), cs.eventId(),
+                            ideaTitle);
                     return ideaService.createIdeaFromFront(cs.conferenceId(), cs.conferenceName(), cs.eventId(),
-                            ideaContent, "");
+                            ideaTitle, ideaDescription);
                 })
                 .onErrorResume(e -> {
                     log.warn("Create idea from unregistered session or error: sessionId={}", session.getId());
@@ -193,17 +198,27 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private Mono<Void> handleConnectBot(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
                 .flatMap(cs -> {
-                    final String botId = jsonNode.path("botId").asText();
-                    if (!StringUtils.hasText(botId)) {
-                        log.warn("Empty botId: conferenceId={}, eventId={}", cs.conferenceId(), cs.eventId());
-                        return Mono.<Void>empty();
-                    }
-                    log.info("Connect bot: conferenceId={}, eventId={}, botId={}", cs.conferenceId(), cs.eventId(),
-                            botId);
-                    return botService.connectBot(cs.conferenceId(), cs.eventId(), botId);
+                    final String talkLink = jsonNode.path("talkLink").asText();
+                    final String platform = "kontur_talk"; // Пока только kontur_talk
+
+                    // Генерация botId для клиента
+                    final String botId = java.util.UUID.randomUUID().toString();
+
+                    // Регистрируем связь botId -> conferenceId + eventId
+                    botService.createBot(platform, botId, botId);
+
+                    log.info("Connect bot request: conferenceId={}, eventId={}, botId={}, talkLink={}, platform={}",
+                            cs.conferenceId(), cs.eventId(), botId, talkLink, platform);
+
+                    // Отправка команды в Kafka
+                    return botKafkaService.sendConnectBotCommand(
+                            botId,
+                            talkLink,
+                            platform);
                 })
                 .onErrorResume(e -> {
-                    log.warn("Connect bot from unregistered session or error: sessionId={}", session.getId());
+                    log.error("Failed to send connect bot command: sessionId={}, error={}",
+                            session.getId(), e.getMessage());
                     return Mono.empty();
                 });
     }
