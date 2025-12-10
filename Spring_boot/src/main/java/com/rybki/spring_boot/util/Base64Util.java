@@ -1,5 +1,6 @@
 package com.rybki.spring_boot.util;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 public class Base64Util {
@@ -9,7 +10,8 @@ public class Base64Util {
         if (bytes == null) {
             return null;
         }
-        return Base64.getEncoder().encodeToString(bytes);
+        // return Base64.getEncoder().encodeToString(bytes);
+        return new String(Base64.getEncoder().encode(bytes), StandardCharsets.UTF_8);
     }
 
     // Декодирование строки Base64 в массив байт

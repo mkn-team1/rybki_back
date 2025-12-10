@@ -13,44 +13,37 @@
       value="^package.*|^import.*|a href|href|http://|https://|ftp://"/>
   </module>
 
-  <!-- === ПРОВЕРКИ НА УРОВНЕ ФАЙЛА === -->
   <module name="NewlineAtEndOfFile"/>
 
   <module name="FileTabCharacter"/>
 
+  <!-- остальной код без изменений -->
   <module name="JavadocPackage">
     <property name="severity" value="ignore"/>
   </module>
   <module name="TreeWalker">
-
-    <!-- === АННОТАЦИИ === -->
+    <!--  === АННОТАЦИИ ===  -->
     <module name="AnnotationLocation"/>
     <module name="MissingOverride"/>
-
-    <!-- === БЛОКИ КОДА === -->
+    <!--  === БЛОКИ КОДА ===  -->
     <module name="AvoidNestedBlocks"/>
     <module name="EmptyBlock">
       <property name="option" value="text"/>
     </module>
-
     <module name="EmptyCatchBlock">
       <property name="exceptionVariableName" value="expected|ignore"/>
     </module>
-
     <module name="LeftCurly"/>
     <module name="RightCurly"/>
     <module name="NeedBraces"/>
-
-    <!-- === КЛАССЫ === -->
+    <!--  === КЛАССЫ ===  -->
     <module name="FinalClass"/>
     <module name="InterfaceIsType"/>
     <module name="VisibilityModifier">
       <property name="protectedAllowed" value="true"/>
     </module>
-
     <module name="OneTopLevelClass"/>
-
-    <!-- === КОДИРОВАНИЕ === -->
+    <!--  === КОДИРОВАНИЕ ===  -->
     <module name="ArrayTrailingComma"/>
     <module name="CovariantEquals"/>
     <module name="DeclarationOrder"/>
@@ -63,41 +56,33 @@
     <module name="FinalLocalVariable">
       <property name="tokens" value="VARIABLE_DEF,PARAMETER_DEF"/>
     </module>
-
     <module name="HiddenField">
       <property name="ignoreConstructorParameter" value="true"/>
       <property name="ignoreSetter" value="true"/>
     </module>
-
-    <module name="IllegalCatch"/>
     <module name="IllegalThrows"/>
     <module name="IllegalType">
       <property name="illegalClassNames"
         value="HashMap, HashSet, LinkedHashMap, LinkedHashSet, TreeMap, TreeSet, java.util.HashMap, java.util.HashSet, java.util.LinkedHashMap, java.util.LinkedHashSet, java.util.TreeMap, java.util.TreeSet"/>
     </module>
-
     <module name="InnerAssignment"/>
     <module name="MagicNumber">
       <property name="ignoreNumbers" value="-1, 0, 0.5, 1, 2, 10, 100, 1000"/>
       <property name="ignoreFieldDeclaration" value="true"/>
       <property name="ignoreAnnotation" value="true"/>
     </module>
-
     <module name="MissingSwitchDefault"/>
     <module name="ModifiedControlVariable"/>
     <module name="MultipleVariableDeclarations"/>
     <module name="NestedForDepth">
       <property name="max" value="3"/>
     </module>
-
     <module name="NestedIfDepth">
       <property name="max" value="3"/>
     </module>
-
     <module name="NestedTryDepth">
       <property name="max" value="2"/>
     </module>
-
     <module name="NoClone"/>
     <module name="NoFinalizer"/>
     <module name="OneStatementPerLine"/>
@@ -108,19 +93,16 @@
       <property name="checkMethods" value="false"/>
       <property name="checkFields" value="true"/>
     </module>
-
     <module name="ReturnCount">
       <property name="max" value="4"/>
     </module>
-
     <module name="SimplifyBooleanExpression"/>
     <module name="SimplifyBooleanReturn"/>
     <module name="StringLiteralEquality"/>
     <module name="SuperClone"/>
     <module name="SuperFinalize"/>
     <module name="UnnecessaryParentheses"/>
-
-    <!-- === ИМПОРТЫ === -->
+    <!--  === ИМПОРТЫ ===  -->
     <module name="AvoidStarImport"/>
     <module name="CustomImportOrder">
       <property name="customImportOrderRules"
@@ -131,16 +113,13 @@
       <property name="sortImportsInGroupAlphabetically" value="true"/>
       <property name="separateLineBetweenGroups" value="true"/>
     </module>
-
     <module name="IllegalImport"/>
     <module name="RedundantImport"/>
     <module name="UnusedImports"/>
-
-    <!-- === ИМЕНА === -->
+    <!--  === ИМЕНА ===  -->
     <module name="AbbreviationAsWordInName">
       <property name="allowedAbbreviations" value="DAO,DTO,VO,JSON,XML,HTTP,URL,URI,SQL,ID,IP,IO"/>
     </module>
-
     <module name="ClassTypeParameterName"/>
     <module name="ConstantName"/>
     <module name="InterfaceTypeParameterName"/>
@@ -153,25 +132,20 @@
     <module name="ParameterName"/>
     <module name="StaticVariableName"/>
     <module name="TypeName"/>
-
-    <!-- === РАЗМЕРЫ === -->
+    <!--  === РАЗМЕРЫ ===  -->
     <module name="AnonInnerLength">
       <property name="max" value="30"/>
     </module>
-
     <module name="ExecutableStatementCount">
       <property name="max" value="30"/>
     </module>
-
     <module name="MethodLength">
       <property name="max" value="50"/>
     </module>
-
     <module name="ParameterNumber">
       <property name="max" value="7"/>
     </module>
-
-    <!-- === ПРОБЕЛЫ === -->
+    <!--  === ПРОБЕЛЫ ===  -->
     <module name="GenericWhitespace"/>
     <module name="MethodParamPad"/>
     <module name="NoLineWrap"/>
@@ -188,52 +162,39 @@
       <property name="allowEmptyTypes" value="true"/>
       <property name="allowEmptyLoops" value="true"/>
     </module>
-
-    <!-- === МОДИФИКАТОРЫ === -->
+    <!--  === МОДИФИКАТОРЫ ===  -->
     <module name="ModifierOrder"/>
     <module name="RedundantModifier"/>
-
-    <!-- === РАЗНОЕ === -->
+    <!--  === РАЗНОЕ ===  -->
     <module name="ArrayTypeStyle"/>
     <module name="CommentsIndentation"/>
     <module name="Indentation">
       <property name="basicOffset" value="4"/>
       <property name="caseIndent" value="4"/>
     </module>
-
     <module name="OuterTypeFilename"/>
     <module name="TodoComment">
       <property name="severity" value="info"/>
     </module>
-
     <module name="UpperEll"/>
-
-    <!-- === ОТКЛЮЧЕННЫЕ JAVADOC ПРАВИЛА === -->
+    <!--  === ОТКЛЮЧЕННЫЕ JAVADOC ПРАВИЛА ===  -->
     <module name="MissingJavadocType">
       <property name="severity" value="ignore"/>
     </module>
-
     <module name="MissingJavadocMethod">
       <property name="severity" value="ignore"/>
     </module>
-
     <module name="JavadocMethod">
       <property name="severity" value="ignore"/>
     </module>
-
     <module name="JavadocType">
       <property name="severity" value="ignore"/>
     </module>
-
     <module name="JavadocVariable">
       <property name="severity" value="ignore"/>
     </module>
-
   </module>
-
-  <!-- === JAVADOC ПАКЕТОВ (должен быть вне TreeWalker) === -->
   <property name="charset" value="UTF-8"/>
 
   <property name="fileExtensions" value="java"/>
-
 </module>

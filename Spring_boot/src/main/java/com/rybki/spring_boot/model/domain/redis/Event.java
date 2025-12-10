@@ -1,0 +1,25 @@
+package com.rybki.spring_boot.model.domain.redis;
+
+import java.time.Instant;
+import java.util.Map;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Event {
+
+    private String eventId;
+    private String eventName;
+    private String creatorConferenceId;
+    private EventStatus status; // ACTIVE, ENDED
+    private Instant createdAt;
+    private Instant endedAt;
+    private Map<String, Object> metadata;
+}
+

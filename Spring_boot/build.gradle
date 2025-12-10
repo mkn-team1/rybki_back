@@ -42,14 +42,11 @@ dependencies {
     implementation 'io.github.resilience4j:resilience4j-reactor:2.2.0'  // Для реактивных потоков
     implementation 'io.github.resilience4j:resilience4j-annotations:2.2.0'  // Для аннотаций
 
-    // WebSocket для реактивных push-сообщений
-    implementation 'org.springframework.boot:spring-boot-starter-websocket'
-
     // Метрики для Prometheus
     implementation 'io.micrometer:micrometer-registry-prometheus'  // Для интеграции с Prometheus
 
     // OpenAPI / Swagger UI для документации
-    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.5.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.13'
     // Генерация документации для WebFlux
 
     // Lombok
@@ -63,7 +60,9 @@ dependencies {
     // Тестирование: JUnit 5, Mockito, Reactor Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'  // Тесты Spring Boot
     testImplementation 'io.projectreactor:reactor-test'  // Для тестирования реактивных потоков
-
+    
+    //Jackson
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
     compileOnly 'org.jetbrains:annotations:24.1.0'
 }
 

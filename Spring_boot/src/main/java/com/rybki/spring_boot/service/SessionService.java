@@ -58,6 +58,15 @@ public class SessionService {
         );
     }
 
+    public Mono<WebSocketSession> getSession(String eventId, String clientId) {
+        return Mono.justOrEmpty(
+            clientSessions.values().stream()
+                .filter(cs -> cs.clientId().equals(clientId) && cs.eventId().equals(eventId))
+                .map(ClientSession::session)
+                .findFirst()
+        );
+    }
+
     // bot logic
 
     public Mono<Void> registerBot(String botId, WebSocketSession session) {

@@ -14,11 +14,9 @@ public class SttResponseHandler {
     private final IdeaService ideaService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    /**
-     * Обрабатываем сообщение от STT
-     */
     @SuppressWarnings("checkstyle:IllegalCatch")
     public void handle(final String json) {
+        log.debug("🔍 [STT-HANDLER] Message raw JSON: {}", json);
         try {
             final JsonNode node = objectMapper.readTree(json);
             final String type = node.path("type").asText();
@@ -31,14 +29,14 @@ public class SttResponseHandler {
                 log.info("Received final_text from STT: clientId={}, eventId={}, text={}",
                     clientId, eventId, text);
 
-                // делегируем нейронке в ideaService, передавая нужные id и текст
+                ideaService.processText(clientId, eventId, text).subscribe();
 
             } else {
                 log.debug("Unknown STT message type: {}", type);
             }
 
         } catch (Exception e) {
-            log.error("Failed to handle STT message: {}", json, e);
+            log.error("❌ [STT-HANDLER] Failed to parse STT response", e);
         }
     }
 }

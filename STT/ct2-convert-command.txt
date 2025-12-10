@@ -1,0 +1,9 @@
+Commands to build Whisper model (write in STT directory)
+
+pip install transformers[torch]>=4.23
+
+ct2-transformers-converter \
+    --model openai/whisper-large-v3-turbo \
+    --output_dir models/large-v3-turbo-ct2 \
+    --copy_files tokenizer.json preprocessor_config.json generation_config.json \
+    --quantization int8
