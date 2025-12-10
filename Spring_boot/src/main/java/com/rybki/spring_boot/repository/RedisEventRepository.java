@@ -45,7 +45,7 @@ public class RedisEventRepository {
             redisTemplate.opsForValue().set(key, event);
 
             final String participantsKey = eventParticipantsKey(event.getEventId());
-            redisTemplate.opsForSet().add(participantsKey, event.getCreatorClientId());
+            redisTemplate.opsForSet().add(participantsKey, event.getCreatorConferenceId());
 
             log.debug("Event created in Redis: {}", event.getEventId());
         } catch (final Exception e) {
@@ -126,18 +126,18 @@ public class RedisEventRepository {
     }
 
     // ДОБАВЛЕНИЕ УЧАСТНИКА
-    public void addParticipant(final String eventId, final String clientId) {
+    public void addParticipant(final String eventId, final String conferenceId) {
         try {
             if (!isRedisConnected()) {
                 throw new RuntimeException("Redis is not connected");
             }
             final String key = eventParticipantsKey(eventId);
-            final Long added = redisTemplate.opsForSet().add(key, clientId);
+            final Long added = redisTemplate.opsForSet().add(key, conferenceId);
             if (added != null && added > 0) {
-                log.debug("Participant {} added to event {}", clientId, eventId);
+                log.debug("Participant {} added to event {}", conferenceId, eventId);
             }
         } catch (final Exception e) {
-            log.error("Error adding participant to event: {} -> {}", clientId, eventId, e);
+            log.error("Error adding participant to event: {} -> {}", conferenceId, eventId, e);
             throw new RuntimeException("Failed to add participant to event", e);
         }
     }
@@ -159,32 +159,32 @@ public class RedisEventRepository {
     }
 
     // ПРОВЕРКА ЯВЛЯЕТСЯ ЛИ УЧАСТНИКОМ
-    public boolean isParticipant(final String eventId, final String clientId) {
+    public boolean isParticipant(final String eventId, final String conferenceId) {
         try {
             if (!isRedisConnected()) {
                 throw new RuntimeException("Redis is not connected");
             }
             final String key = eventParticipantsKey(eventId);
-            return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(key, clientId));
+            return Boolean.TRUE.equals(redisTemplate.opsForSet().isMember(key, conferenceId));
         } catch (final Exception e) {
-            log.error("Error checking participant: {} in event: {}", clientId, eventId, e);
+            log.error("Error checking participant: {} in event: {}", conferenceId, eventId, e);
             return false;
         }
     }
 
     // УДАЛЕНИЕ УЧАСТНИКА
-    public void removeParticipant(final String eventId, final String clientId) {
+    public void removeParticipant(final String eventId, final String conferenceId) {
         try {
             if (!isRedisConnected()) {
                 throw new RuntimeException("Redis is not connected");
             }
             final String key = eventParticipantsKey(eventId);
-            final Long removed = redisTemplate.opsForSet().remove(key, clientId);
+            final Long removed = redisTemplate.opsForSet().remove(key, conferenceId);
             if (removed != null && removed > 0) {
-                log.debug("Participant {} removed from event {}", clientId, eventId);
+                log.debug("Participant {} removed from event {}", conferenceId, eventId);
             }
         } catch (final Exception e) {
-            log.error("Error removing participant from event: {} -> {}", clientId, eventId, e);
+            log.error("Error removing participant from event: {} -> {}", conferenceId, eventId, e);
             throw new RuntimeException("Failed to remove participant from event", e);
         }
     }

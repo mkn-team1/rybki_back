@@ -33,9 +33,11 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private final SessionService sessionService;
     private final SttRoutingService sttRoutingService;
     private final VoteService voteService;
+
     private final IdeaService ideaService;
     private final BotService botService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
     private final AudioDumpService audioDumpService;
 
     @Override

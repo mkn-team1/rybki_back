@@ -1,11 +1,15 @@
 package com.rybki.spring_boot.controller;
 
-import com.rybki.spring_boot.model.domain.CreateEventRequest;
-import com.rybki.spring_boot.model.domain.CreateEventResponse;
-import com.rybki.spring_boot.model.domain.EndEventRequest;
-import com.rybki.spring_boot.model.domain.EndEventResponse;
-import com.rybki.spring_boot.model.domain.JoinEventRequest;
-import com.rybki.spring_boot.model.domain.JoinEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.create.CreateEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.create.CreateEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.end.EndEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.end.EndEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.join.JoinEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.join.JoinEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventResponse;
 import com.rybki.spring_boot.service.EventService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -18,6 +22,8 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
+
 
 @RestController
 @RequestMapping("/events")
@@ -53,7 +59,7 @@ public class EventController {
         return ResponseEntity.ok(response);
     }
 
-
+    // Завершить событие
     @PostMapping("/{eventId}/end")
     @Operation(summary = "End Event", description = "End Event")
     @ApiResponse(responseCode = "200", description = "Event ended")
@@ -66,4 +72,32 @@ public class EventController {
             eventService.endEvent(eventId, endEventRequest);
         return ResponseEntity.ok(response);
     }
+
+    // Покинуть событие
+    @PostMapping("/{eventId}/leave")
+    @Operation(summary = "Leave Event", description = "Leave Event")
+    @ApiResponse(responseCode = "200", description = "Event left")
+    @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
+    @ApiResponse(responseCode = "404", description = "Event not found")
+    @ApiResponse(responseCode = "500", description = "Internal Server Error")
+    public ResponseEntity<LeaveEventResponse> leaveEvent(final @PathVariable String eventId,
+        final @RequestBody @Valid LeaveEventRequest leaveEventRequest) {
+        final LeaveEventResponse response = 
+            eventService.leaveEvent(eventId, leaveEventRequest);
+        return ResponseEntity.ok(response);
+    }
+
+    // Получить сводку события
+    @GetMapping("/{eventId}/summary")
+    @Operation(summary = "Summarize Event", description = "Get Event Summary")
+    @ApiResponse(responseCode = "200", description = "Event summary retrieved")
+    @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
+    @ApiResponse(responseCode = "404", description = "Event not found")
+    @ApiResponse(responseCode = "500", description = "Internal Server Error")
+    public ResponseEntity<SummarizeEventResponse> summarizeEvent(final @PathVariable String eventId,
+        final @RequestBody @Valid SummarizeEventRequest summarizeEventRequest) {
+        final SummarizeEventResponse response = eventService.summarizeEvent(eventId, summarizeEventRequest);
+        return ResponseEntity.ok(response);
+    }
+    
 }
