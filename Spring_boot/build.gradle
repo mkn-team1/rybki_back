@@ -46,7 +46,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'  // Для интеграции с Prometheus
 
     // OpenAPI / Swagger UI для документации
-    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.6.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.13'
     // Генерация документации для WebFlux
 
     // Lombok
