@@ -1,14 +1,20 @@
 package com.rybki.spring_boot.service;
 
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+
 import com.rybki.spring_boot.client.IdeaExtractorClient;
 import com.rybki.spring_boot.model.domain.Idea;
+import com.rybki.spring_boot.model.domain.redis.IdeaStatus;
+import com.rybki.spring_boot.repository.RedisIdeaRepository;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -17,27 +23,113 @@ public class IdeaService {
 
     private final IdeaExtractorClient ideaExtractorClient;
     private final ClientNotificationService clientNotificationService;
+    private final RedisIdeaRepository ideaRepository;
 
-    public Mono<Void> processText(String clientId, String eventId, String text) {
-        log.info("💡 [IDEA-SERVICE] Starting idea extraction: clientId={}, eventId={}, textLength={} chars", clientId, eventId, text.length());
-        log.info("💡 [IDEA-SERVICE] Text: \"{}\"", text);
-        
+    public Mono<Void> processText(String conferenceId, String conferenceName, String eventId, String text) {
+        log.info("💡 [IDEA-SERVICE] Starting idea extraction: conferenceId={}, eventId={}, textLength={} chars",
+                conferenceId, eventId, text.length());
+
         return ideaExtractorClient.extractIdeas(text)
-            .flatMap(ideas -> processIdeas(clientId, eventId, ideas))
-            .doOnError(e -> log.error("❌ [IDEA-SERVICE] Failed to process ideas for clientId={}, eventId={}", clientId, eventId, e))
-            .onErrorResume(e -> Mono.empty());
+                .flatMap(ideas -> processIdeas(conferenceId, conferenceName, eventId, ideas))
+                .doOnError(e -> log.error("❌ [IDEA-SERVICE] Failed to process ideas for conferenceId={}, eventId={}",
+                        conferenceId, eventId, e))
+                .onErrorResume(e -> Mono.empty());
     }
 
-    private Mono<Void> processIdeas(String clientId, String eventId, List<Idea> ideas) {
+    private Mono<Void> processIdeas(String conferenceId, String conferenceName, String eventId, List<Idea> ideas) {
         if (ideas == null || ideas.isEmpty()) {
-            log.info("⚠️ [IDEA-SERVICE] No ideas found for clientId={}, eventId={}", clientId, eventId);
+            log.info("⚠️ [IDEA-SERVICE] No ideas found for conferenceId={}, eventId={}", conferenceId, eventId);
             return Mono.empty();
         }
 
         log.info("💡 [IDEA-SERVICE] Found {} ideas", ideas.size());
 
         return Flux.fromIterable(ideas)
-            .flatMap(idea -> clientNotificationService.sendIdeaToClient(clientId, eventId, idea))
-            .then();
+                .flatMap(idea -> createAndSendIdea(conferenceId, conferenceName, eventId, idea))
+                .then();
+    }
+
+    private Mono<Void> createAndSendIdea(String conferenceId, String conferenceName, String eventId, Idea idea) {
+        final com.rybki.spring_boot.model.domain.redis.Idea redisIdea = com.rybki.spring_boot.model.domain.redis.Idea
+                .builder()
+                .ideaId(UUID.randomUUID().toString())
+                .eventId(eventId)
+                .conferenceId(conferenceId)
+                .conferenceName(conferenceName)
+                .title(idea.title())
+                .description(idea.description())
+                .status(IdeaStatus.PENDING)
+                .createdAt(Instant.now())
+                .author(conferenceName)
+                .likes(0)
+                .dislikes(0)
+                .myReaction(null)
+                .promotedToGlobalAt(null)
+                .promotedToGoldenAt(null)
+                .build();
+
+        return Mono.fromRunnable(() -> ideaRepository.saveIdea(redisIdea))
+                .then(clientNotificationService.broadcastIdea(conferenceId, eventId, redisIdea))
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created: ideaId={}, title={}", redisIdea.getIdeaId(),
+                        redisIdea.getTitle()));
+    }
+
+    public Mono<Void> createIdeaFromFront(String conferenceId, String conferenceName, String eventId, String title,
+            String description) {
+        final com.rybki.spring_boot.model.domain.redis.Idea idea = com.rybki.spring_boot.model.domain.redis.Idea
+                .builder()
+                .ideaId(UUID.randomUUID().toString())
+                .eventId(eventId)
+                .conferenceId(conferenceId)
+                .conferenceName(conferenceName)
+                .title(title)
+                .description(description)
+                .status(IdeaStatus.PENDING)
+                .createdAt(Instant.now())
+                .author(conferenceName)
+                .likes(0)
+                .dislikes(0)
+                .myReaction(null)
+                .build();
+
+        return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
+                .then(clientNotificationService.broadcastIdea(conferenceId, eventId, idea))
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front: ideaId={}", idea.getIdeaId()));
+    }
+
+    public Mono<Void> deleteIdea(String conferenceId, String eventId, String ideaId) {
+        log.info("✅ [IDEA-SERVICE] Idea deletion marked for: ideaId={}", ideaId);
+        return clientNotificationService.broadcastIdeaDeleted(conferenceId, eventId, ideaId);
+    }
+
+    public Mono<Void> reactToIdea(String conferenceId, String eventId, String ideaId, String reaction) {
+        return Mono.fromCallable(() -> ideaRepository.findIdeaById(ideaId))
+                .flatMap(ideaOpt -> {
+                    if (ideaOpt.isPresent()) {
+                        final com.rybki.spring_boot.model.domain.redis.Idea r = ideaOpt.get();
+                        if ("like".equals(reaction)) {
+                            r.setLikes(r.getLikes() != null ? r.getLikes() + 1 : 1);
+                        } else if ("dislike".equals(reaction)) {
+                            r.setDislikes(r.getDislikes() != null ? r.getDislikes() + 1 : 1);
+                        }
+                        ideaRepository.saveIdea(r);
+                        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, likes={}, dislikes={}",
+                                ideaId, reaction, r.getLikes(), r.getDislikes());
+                        return clientNotificationService.broadcastIdeaReaction(conferenceId, eventId, ideaId,
+                                reaction, r.getLikes(), r.getDislikes());
+                    }
+                    return Mono.empty();
+                });
+    }
+
+    public Mono<List<com.rybki.spring_boot.model.domain.redis.Idea>> getIdeasForEvent(String eventId) {
+        return Mono.fromCallable(() -> {
+            final var pendingIds = ideaRepository.getPendingIdeas(eventId);
+            return pendingIds.stream()
+                    .map(ideaRepository::findIdeaById)
+                    .filter(java.util.Optional::isPresent)
+                    .map(java.util.Optional::get)
+                    .toList();
+        });
     }
 }

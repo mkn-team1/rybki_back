@@ -1,12 +1,15 @@
 package com.rybki.spring_boot.service;
 
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import com.rybki.spring_boot.model.domain.ClientSession;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.socket.WebSocketSession;
+
+import com.rybki.spring_boot.model.domain.ClientSession;
+
+import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -24,13 +27,20 @@ public class SessionService {
     private final ConcurrentMap<String, String> clientToBot = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String> botToClient = new ConcurrentHashMap<>();
 
-    // client logic
+    // Регистрирует новую WS-сессию
+    public Mono<Void> register(final WebSocketSession session, final String conferenceId,
+            final String eventId) {
+        return register(session, conferenceId, "", eventId);
+    }
 
-    public Mono<Void> register(WebSocketSession session, String clientId, String eventId) {
+    public Mono<Void> register(final WebSocketSession session, final String conferenceId,
+            final String conferenceName, final String eventId) {
         return Mono.fromRunnable(() -> {
-            clientSessions.put(session.getId(), new ClientSession(clientId, eventId, session));
-            log.debug("Client registered: clientId={}, eventId={}, sessionId={}",
-                clientId, eventId, session.getId());
+            clientSessions.put(session.getId(),
+                    new ClientSession(conferenceId, conferenceName, eventId, session));
+            log.debug("Registered session: sessionId={}, conferenceId={}, eventId={}",
+                    session.getId(), conferenceId, eventId);
+
         });
     }
 
@@ -45,26 +55,29 @@ public class SessionService {
         return Mono.justOrEmpty(clientSessions.get(session.getId()));
     }
 
-    public Flux<ClientSession> getSessionsForEvent(String eventId) {
-        return Flux.fromStream(clientSessions.values().stream()
-            .filter(cs -> cs.eventId().equals(eventId)));
+    // Получить все сессии для конкретного event
+    public Flux<ClientSession> getSessionsForEvent(final String eventId) {
+        final List<ClientSession> list = sessions.values().stream()
+                .filter(cs -> cs.eventId().equals(eventId))
+                .toList();
+        return Flux.fromIterable(list);
     }
 
-    public Mono<ClientSession> getClientSession(String clientId) {
+    // Получить WS-сессию по eventId и conferenceId
+    public Mono<WebSocketSession> getSession(final String eventId, final String conferenceId) {
         return Mono.justOrEmpty(
-            clientSessions.values().stream()
-                .filter(cs -> cs.clientId().equals(clientId))
-                .findFirst()
-        );
+                sessions.values().stream()
+                        .filter(cs -> cs.eventId().equals(eventId) && cs.conferenceId().equals(conferenceId))
+                        .map(ClientSession::session)
+                        .findFirst());
+
+     public Mono<ClientSession> getClientSession(String clientId) {
+        return Mono.justOrEmpty(
+                clientSessions.values().stream()
+                        .filter(cs -> cs.clientId().equals(clientId))
+                        .findFirst());
     }
 
-    public Mono<WebSocketSession> getSession(String eventId, String clientId) {
-        return Mono.justOrEmpty(
-            clientSessions.values().stream()
-                .filter(cs -> cs.clientId().equals(clientId) && cs.eventId().equals(eventId))
-                .map(ClientSession::session)
-                .findFirst()
-        );
     }
 
     // bot logic
