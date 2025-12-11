@@ -20,7 +20,7 @@ import reactor.core.publisher.Mono;
 public class ClientNotificationService {
 
     private final SessionService sessionService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     /**
      * Send a new idea to a specific client (not broadcast to all)
@@ -106,7 +106,8 @@ public class ClientNotificationService {
                     try {
                         final String jsonMessage = objectMapper.writeValueAsString(message);
                         @SuppressWarnings("null")
-                        Mono<Void> result = session.getSession().send(Mono.just(session.getSession().textMessage(jsonMessage)))
+                        Mono<Void> result = session.getSession()
+                                .send(Mono.just(session.getSession().textMessage(jsonMessage)))
                                 .doOnSuccess(v -> log.info("✅ [NOTIFICATION] Sent message type={} to client "
                                         + "conferenceId={}", message.get("type"), conferenceId))
                                 .doOnError(e -> log.error("❌ [NOTIFICATION] Failed to send message to client: {}",
@@ -127,7 +128,9 @@ public class ClientNotificationService {
      * Broadcast a message to all clients connected to an event
      */
     private Mono<Void> broadcastToEvent(final String eventId, final Map<String, Object> message) {
+        log.info("📡 [BROADCAST] Starting broadcast for eventId={}, messageType={}", eventId, message.get("type"));
         return sessionService.getSessionsForEvent(eventId)
+                .doOnNext(session -> log.debug("📡 [BROADCAST] Found session for eventId={}: {}", eventId, session.getSession().getId()))
                 .flatMap(clientSession -> {
                     try {
                         final String jsonMessage = objectMapper.writeValueAsString(message);
@@ -145,11 +148,12 @@ public class ClientNotificationService {
                     }
                 })
                 .collectList()
+                .doOnNext(list -> log.info("📡 [BROADCAST] Broadcasting to {} sessions for eventId={}", list.size(), eventId))
                 .then()
-                .doOnSuccess(v -> log.info("✅ [BROADCAST] Broadcast message type={} to event={}",
+                .doOnSuccess(v -> log.info("✅ [BROADCAST] Broadcast message type={} to event={} completed",
                         message.get("type"), eventId))
                 .onErrorResume(e -> {
-                    log.warn("⚠️ [BROADCAST] Error broadcasting to event={}", eventId);
+                    log.warn("⚠️ [BROADCAST] Error broadcasting to event={}: {}", eventId, e.getMessage());
                     return Mono.empty();
                 });
     }
