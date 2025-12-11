@@ -1,12 +1,13 @@
 package com.rybki.spring_boot.websocket;
 
-import java.nio.ByteBuffer;
-
+import com.rybki.spring_boot.service.AudioDumpService;
+import com.rybki.spring_boot.service.BotService;
 import com.rybki.spring_boot.service.SessionService;
 import com.rybki.spring_boot.service.SttRoutingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
@@ -20,11 +21,14 @@ import reactor.core.publisher.Mono;
  * - при закрытии — отписывает бота
  */
 @Slf4j
+@Component
 @RequiredArgsConstructor
 public class BotWebSocketHandler implements WebSocketHandler {
 
     private final SessionService sessionService;
     private final SttRoutingService sttRoutingService;
+    private final BotService botService;
+    private final AudioDumpService audioDumpService;
 
     @Override
     public @NotNull Mono<Void> handle(@NotNull WebSocketSession session) {
@@ -35,9 +39,8 @@ public class BotWebSocketHandler implements WebSocketHandler {
         }
 
         log.info("Bot connected: botId={}, sessionId={}", botId, session.getId());
-        sessionService.registerBot(botId, session);
-
-        return session
+        return botService.handleBotStarted(botId).then(
+            session
             .receive()
             .flatMap(msg -> {
                 if (msg.getType() == WebSocketMessage.Type.BINARY) {
@@ -50,33 +53,35 @@ public class BotWebSocketHandler implements WebSocketHandler {
             .doFinally(signal -> {
                 log.info("Bot disconnected: botId={}, sessionId={}, signal={}",
                         botId, session.getId(), signal);
-                sessionService.unregisterBot(botId).subscribe();
-            })
-            .then();
+                botService.handleBotRemoved(botId);
+            }).then()
+        );
     }
 
     /** BINARY → пересылаем в STT */
     private Mono<Void> handleBinary(String botId, WebSocketMessage msg) {
         return Mono.fromRunnable(() -> {
             try {
-                ByteBuffer buffer = msg.getPayload().asByteBuffer();
-                byte[] bytes = new byte[buffer.remaining()];
-                buffer.get(bytes);
+                final byte[] bytes = new byte[msg.getPayload().readableByteCount()];
+                msg.getPayload().read(bytes);
 
                 // Найти клиентId, связанного с ботом
-                String clientId = sessionService.getClientForBot(botId);
-                if (clientId == null) {
+                String conferenceId = sessionService.getClientForBot(botId);
+                if (conferenceId == null) {
                     log.debug("Bot {} sent audio but no linked client — ignoring", botId);
                     return;
                 }
 
-                // Получить ClientSession по clientId
-                sessionService.getClientSession(clientId)
+                // Получить ClientSession по conferenceId
+                sessionService.getClientSession(conferenceId)
                     .flatMap(cs ->
                         sttRoutingService.forwardAudio(
-                            cs.clientId(),   // clientId
-                            cs.eventId(),    // eventId
-                            bytes            // PCM audio
+                            cs.getConferenceId(),   // conferenceId
+                            cs.getEventId(),        // eventId
+                            bytes                   // PCM audio
+                        )
+                        .then(
+                            audioDumpService.append(cs.getSession().getId(), bytes)
                         )
                     )
                     .doOnError(e -> log.error("Failed to forward audio from bot {}", botId, e))

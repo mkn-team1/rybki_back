@@ -93,7 +93,7 @@ public class IdeaService {
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
-                .then(clientNotificationService.sendIdeaToClient(conferenceId, eventId, idea))
+                .then(clientNotificationService.sendIdeaToClient(conferenceId, idea))
                 .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front: ideaId={}", idea.getIdeaId()));
     }
 

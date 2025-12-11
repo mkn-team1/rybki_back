@@ -25,8 +25,8 @@ public class ClientNotificationService {
     /**
      * Send a new idea to a specific client (not broadcast to all)
      */
-    public Mono<Void> sendIdeaToClient(final String conferenceId, final String eventId, final Idea idea) {
-        return sendToClient(conferenceId, eventId, Map.of(
+    public Mono<Void> sendIdeaToClient(final String conferenceId, final Idea idea) {
+        return sendToClient(conferenceId, Map.of(
                 "type", "idea",
                 "idea", idea));
     }
@@ -82,8 +82,8 @@ public class ClientNotificationService {
     /**
      * Send bot connection notification to a specific client
      */
-    public Mono<Void> botConnected(final String conferenceId, final String eventId, final String botId) {
-        return sendToClient(conferenceId, eventId, Map.of(
+    public Mono<Void> botConnected(final String conferenceId, final String botId) {
+        return sendToClient(conferenceId, Map.of(
                 "type", "bot_connected",
                 "botId", botId));
     }
@@ -91,8 +91,8 @@ public class ClientNotificationService {
     /**
      * Send bot disconnection notification to a specific client
      */
-    public Mono<Void> botDisconnected(final String conferenceId, final String eventId, final String botId) {
-        return sendToClient(conferenceId, eventId, Map.of(
+    public Mono<Void> botDisconnected(final String conferenceId, final String botId) {
+        return sendToClient(conferenceId, Map.of(
                 "type", "bot_disconnected",
                 "botId", botId));
     }
@@ -100,14 +100,13 @@ public class ClientNotificationService {
     /**
      * Send a message to a specific client by conference ID
      */
-    public Mono<Void> sendToClient(final String conferenceId, final String eventId,
-            final Map<String, Object> message) {
-        return sessionService.getSession(conferenceId, eventId)
+    public Mono<Void> sendToClient(final String conferenceId, final Map<String, Object> message) {
+        return sessionService.getClientSession(conferenceId)
                 .flatMap(session -> {
                     try {
                         final String jsonMessage = objectMapper.writeValueAsString(message);
                         @SuppressWarnings("null")
-                        Mono<Void> result = session.send(Mono.just(session.textMessage(jsonMessage)))
+                        Mono<Void> result = session.getSession().send(Mono.just(session.getSession().textMessage(jsonMessage)))
                                 .doOnSuccess(v -> log.info("✅ [NOTIFICATION] Sent message type={} to client "
                                         + "conferenceId={}", message.get("type"), conferenceId))
                                 .doOnError(e -> log.error("❌ [NOTIFICATION] Failed to send message to client: {}",
@@ -132,7 +131,7 @@ public class ClientNotificationService {
                 .flatMap(clientSession -> {
                     try {
                         final String jsonMessage = objectMapper.writeValueAsString(message);
-                        final WebSocketSession session = clientSession.session();
+                        final WebSocketSession session = clientSession.getSession();
                         @SuppressWarnings("null")
                         final Mono<Void> result = session.send(
                                 Mono.just(session.textMessage(jsonMessage)))

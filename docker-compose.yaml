@@ -99,19 +99,19 @@ services:
       retries: 10
       start_period: 10s
 
-  bot-consumer:
-    build:
-      context: ./Bot_Consumer
-    container_name: bot-consumer
-    restart: unless-stopped
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      BACKEND_BASE_URL: http://spring-backend:8080
-    depends_on:
-      kafka-init:
-        condition: service_completed_successfully
-      spring-backend:
-        condition: service_healthy
+  # bot-consumer:
+  #   build:
+  #     context: ./Bot_Consumer
+  #   container_name: bot-consumer
+  #   restart: unless-stopped
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  #     BACKEND_BASE_URL: http://spring-backend:8080
+  #   depends_on:
+  #     kafka-init:
+  #       condition: service_completed_successfully
+  #     spring-backend:
+  #       condition: service_healthy
 
   spring-backend:
     build:
@@ -129,6 +129,7 @@ services:
       STT_URL: ${STT_URL}
       AUDIO_DUMP_ENABLED: true
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_BOT_TASKS_TOPIC: ${BOT_TASKS_TOPIC}
     depends_on:
       redis:
         condition: service_healthy
@@ -150,17 +151,21 @@ services:
     restart: unless-stopped
     ports:
       - "9000:9000"
+    deploy:
+      replicas: ${NUMBER_OF_BROWSER_INSTANCES}
     environment:
       REDIS_HOST: ${REDIS_HOST}
       REDIS_PORT: ${REDIS_PORT}
       REDIS_QUEUE_KEY: "meeting_tasks"
       BACKEND_BASE_URL: "https://spring-backend:8443"
       AUDIO_WS_URL: "wss://spring-backend:8443/ws/client"
-      MAX_CONCURRENT_BOTS: 4
+      MAX_CONCURRENT_BOTS: ${MAX_CONCURRENT_BOTS_PER_INSTANCE}
     depends_on:
       spring-backend:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 volumes:
   redis_data:

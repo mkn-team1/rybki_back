@@ -7,14 +7,12 @@ import org.springframework.stereotype.Service;
 
 import com.rybki.spring_boot.exception.BadRequestException;
 import com.rybki.spring_boot.exception.NotFoundException;
-import com.rybki.spring_boot.model.domain.CreateEventRequest;
-import com.rybki.spring_boot.model.domain.CreateEventResponse;
-import com.rybki.spring_boot.model.domain.EndEventRequest;
-import com.rybki.spring_boot.model.domain.JoinEventRequest;
-import com.rybki.spring_boot.model.domain.JoinEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.create.CreateEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.create.CreateEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.end.EndEventRequest;
 import com.rybki.spring_boot.model.domain.api.event.end.EndEventResponse;
-import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventRequest;
-import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventResponse;
+import com.rybki.spring_boot.model.domain.api.event.join.JoinEventRequest;
+import com.rybki.spring_boot.model.domain.api.event.join.JoinEventResponse;
 import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventRequest;
 import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventResponse;
 import com.rybki.spring_boot.model.domain.redis.Event;
@@ -30,7 +28,6 @@ import lombok.extern.slf4j.Slf4j;
 public class EventService {
 
     private final RedisEventRepository eventRepository;
-    private final BotService botService;
 
     public CreateEventResponse createEvent(final CreateEventRequest eventRequest) {
         final String conferenceId = UUID.randomUUID().toString();
@@ -102,6 +99,8 @@ public class EventService {
 
         }
 
+        // TODO: реализовать завершение ивента
+
         eventRepository.deleteEvent(eventId);
 
         // 4. СОБИРАЕМ СТАТИСТИКУ ИЗ REDIS
@@ -115,27 +114,20 @@ public class EventService {
         return EndEventResponse.builder().build();
     }
 
-    public LeaveEventResponse leaveEvent(final String eventId, final LeaveEventRequest leaveEventRequest) {
-        final String conferenceId = leaveEventRequest.getConferenceId();
-
-        log.info("Client {} leaving event {}", conferenceId, eventId);
-
-        final Event event = eventRepository.findEventById(eventId)
-                .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
-
-        if (!eventRepository.isParticipant(eventId, conferenceId)) {
-            throw new BadRequestException("Client is not a participant of the event: " + eventId);
-        }
-
-        // TODO: Сделать логику при выходе из конференции с выдачей summary
-
-        botService.handleClientLeave(eventId, conferenceId);
-        // eventRepository.removeParticipant(eventId, conferenceId);
-
-        log.info("Client {} successfully left event {}", conferenceId, eventId);
-
-        return LeaveEventResponse.builder().build();
-    }
+    // public LeaveEventResponse leaveEvent(final String eventId, final LeaveEventRequest leaveEventRequest) {
+    //     final String conferenceId = leaveEventRequest.getConferenceId();
+    //     log.info("Client {} leaving event {}", conferenceId, eventId);
+    //     final Event event = eventRepository.findEventById(eventId)
+    //             .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
+    //     if (!eventRepository.isParticipant(eventId, conferenceId)) {
+    //         throw new BadRequestException("Client is not a participant of the event: " + eventId);
+    //     }
+    //     // TODO: Сделать логику при выходе из конференции с выдачей summary
+    //     botService.handleClientLeave(eventId, conferenceId);
+    //     // eventRepository.removeParticipant(eventId, conferenceId);
+    //     log.info("Client {} successfully left event {}", conferenceId, eventId);
+    //     return LeaveEventResponse.builder().build();
+    // }
 
     public SummarizeEventResponse summarizeEvent(final String eventId,
             final SummarizeEventRequest summarizeEventRequest) {

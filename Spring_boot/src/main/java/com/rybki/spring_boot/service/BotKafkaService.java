@@ -1,6 +1,7 @@
 package com.rybki.spring_boot.service;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import lombok.RequiredArgsConstructor;
@@ -16,8 +17,9 @@ import reactor.kafka.sender.SenderRecord;
 @Service
 @RequiredArgsConstructor
 public class BotKafkaService {
-
-    private static final String BOT_COMMANDS_TOPIC = "bot-commands";
+    
+    @Value("${spring.kafka.bot-tasks-topic}")
+    private String botTasksTopic;
 
     private final KafkaSender<String, String> kafkaSender;
 
@@ -41,7 +43,7 @@ public class BotKafkaService {
         log.info("Sending connect bot command to Kafka: botId={}, meetingUrl={}, platform={}",
                 botId, meetingUrl, platform);
 
-        final ProducerRecord<String, String> record = new ProducerRecord<>(BOT_COMMANDS_TOPIC, key, commandJson);
+        final ProducerRecord<String, String> record = new ProducerRecord<>(botTasksTopic, key, commandJson);
         final SenderRecord<String, String, Void> senderRecord = SenderRecord.create(record, null);
 
         return kafkaSender.send(Mono.just(senderRecord))

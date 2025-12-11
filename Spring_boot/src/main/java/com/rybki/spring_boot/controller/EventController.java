@@ -74,18 +74,18 @@ public class EventController {
     }
 
     // Покинуть событие
-    @PostMapping("/{eventId}/leave")
-    @Operation(summary = "Leave Event", description = "Leave Event")
-    @ApiResponse(responseCode = "200", description = "Event left")
-    @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
-    @ApiResponse(responseCode = "404", description = "Event not found")
-    @ApiResponse(responseCode = "500", description = "Internal Server Error")
-    public ResponseEntity<LeaveEventResponse> leaveEvent(final @PathVariable String eventId,
-        final @RequestBody @Valid LeaveEventRequest leaveEventRequest) {
-        final LeaveEventResponse response = 
-            eventService.leaveEvent(eventId, leaveEventRequest);
-        return ResponseEntity.ok(response);
-    }
+    // @PostMapping("/{eventId}/leave")
+    // @Operation(summary = "Leave Event", description = "Leave Event")
+    // @ApiResponse(responseCode = "200", description = "Event left")
+    // @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
+    // @ApiResponse(responseCode = "404", description = "Event not found")
+    // @ApiResponse(responseCode = "500", description = "Internal Server Error")
+    // public ResponseEntity<LeaveEventResponse> leaveEvent(final @PathVariable String eventId,
+    //     final @RequestBody @Valid LeaveEventRequest leaveEventRequest) {
+    //     final LeaveEventResponse response = 
+    //         eventService.leaveEvent(eventId, leaveEventRequest);
+    //     return ResponseEntity.ok(response);
+    // }
 
     // Получить сводку события
     @GetMapping("/{eventId}/summary")
