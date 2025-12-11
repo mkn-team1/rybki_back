@@ -47,7 +47,7 @@ public class BotService {
                 return Mono.empty();
             }
             return botSession.send(Mono.just(botSession.textMessage("{\"type\":\"leave\"}")))
-                            .doOnSubscribe(s ->
+                            .doOnSuccess(s ->
                                 log.info("🤖 [BOT-SERVICE] Sending leave to botId={}", botId)
                             )
                             .doOnError(e ->

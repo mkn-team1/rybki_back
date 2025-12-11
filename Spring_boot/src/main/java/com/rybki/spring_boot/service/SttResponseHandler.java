@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SttResponseHandler {
 
     private final IdeaService ideaService;
+    private final SessionService sessionService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @SuppressWarnings("checkstyle:IllegalCatch")
@@ -31,11 +32,11 @@ public class SttResponseHandler {
                 log.info("Received final_text from STT: conferenceId={}, eventId={}, text={}",
                         conferenceId, eventId, text);
 
-                // TODO: Get conferenceName from SessionService.getSession(conferenceId,
-                // eventId)
-                // For now, use empty string as placeholder
-                ideaService.processText(conferenceId, "", eventId, text).subscribe();
-
+                
+                sessionService.getClientSession(conferenceId).doOnNext(cs -> 
+                    ideaService.processText(conferenceId, cs.getConferenceName(), eventId, text)
+                ).subscribe(); 
+                
             } else {
                 log.debug("Unknown STT message type: {}", type);
             }
