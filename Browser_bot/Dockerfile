@@ -29,7 +29,6 @@ COPY src ./src
 RUN npm run build
 
 ENV NODE_ENV=development
-ENV MAX_CONCURRENT_BOTS=4 \
-    TASK_POLL_INTERVAL_MS=1000
+ENV TASK_POLL_INTERVAL_MS=1000
 
 CMD ["dumb-init", "node", "dist/index.js"]

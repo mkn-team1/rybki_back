@@ -1,23 +1,10 @@
 import { Page } from "playwright";
 import { JoinConferenceTask } from "../taskTypes";
-import axios from "axios";
-import https from "https";
 import { logger } from "../logger";
 import { installWebRtcAudioHook } from "../audioStreamer";
 import { loadConfig } from "../config";
 
 const cfg = loadConfig();
-
-type notifyBackendStatus = "started" | "removed"
-
-// Агент, который игнорирует ошибки сертификатов
-const httpsAgent = new https.Agent({  
-  rejectUnauthorized: false
-});
-
-const apiClient = axios.create({
-  httpsAgent: httpsAgent
-});
 
 export abstract class BasePlatformConnector {
   abstract platformName: string;
@@ -42,18 +29,11 @@ export abstract class BasePlatformConnector {
       await page.locator(selector).first().waitFor({ timeout: 60000 });
       logger.info({ botId }, "Joined conference successfully");
 
-      // Уведомляем бэк: Успех
-      await this.notifyBackend(botId, "started");
-
       // Ждем конца
       await this.waitForShutdown(page, signal, botId);
 
     } catch (error: any) {
       logger.error({ botId, error }, "Error in bot session");
-      await this.notifyBackend(botId, "removed");
-      throw error;
-    } finally {
-      await this.notifyBackend(botId, "removed");
     }
   }
 
@@ -85,13 +65,5 @@ export abstract class BasePlatformConnector {
             resolve();
         });
     });
-  }
-
-  private async notifyBackend(botId: string, status: notifyBackendStatus) {
-      try {
-          await apiClient.post(`${cfg.backendRestUrl}/bot/${botId}/${status}`);
-      } catch (e) {
-          logger.warn({ botId, status, err: e }, "Failed to send status update");
-      }
   }
 }
