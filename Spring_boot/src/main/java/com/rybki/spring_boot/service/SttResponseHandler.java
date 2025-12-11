@@ -1,10 +1,12 @@
 package com.rybki.spring_boot.service;
 
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
@@ -22,14 +24,17 @@ public class SttResponseHandler {
             final String type = node.path("type").asText();
 
             if ("final_text".equals(type)) {
-                final String clientId = node.path("clientId").asText();
+                final String conferenceId = node.path("clientId").asText();
                 final String eventId = node.path("eventId").asText();
                 final String text = node.path("text").asText();
 
-                log.info("Received final_text from STT: clientId={}, eventId={}, text={}",
-                    clientId, eventId, text);
+                log.info("Received final_text from STT: conferenceId={}, eventId={}, text={}",
+                        conferenceId, eventId, text);
 
-                ideaService.processText(clientId, eventId, text).subscribe();
+                // TODO: Get conferenceName from SessionService.getSession(conferenceId,
+                // eventId)
+                // For now, use empty string as placeholder
+                ideaService.processText(conferenceId, "", eventId, text).subscribe();
 
             } else {
                 log.debug("Unknown STT message type: {}", type);

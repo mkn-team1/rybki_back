@@ -37,14 +37,14 @@ public class AudioDumpService {
 
     private final Map<String, Writer> writers = new ConcurrentHashMap<>();
 
-    public Mono<Void> start(String sessionId, String clientId, String eventId) {
+    public Mono<Void> start(String sessionId, String conferenceId, String eventId) {
         if (!enabled) return Mono.empty();
         return Mono.fromRunnable(() -> {
                 try {
-                    Files.createDirectories(BASE_DIR.resolve(safe(eventId)).resolve(safe(clientId)));
+                    Files.createDirectories(BASE_DIR.resolve(safe(eventId)).resolve(safe(conferenceId)));
                     final String ts = DateTimeFormatter.ISO_INSTANT.format(Instant.now()).replace(":", "-");
                     final Path path = BASE_DIR.resolve(safe(eventId))
-                                             .resolve(safe(clientId))
+                                             .resolve(safe(conferenceId))
                                              .resolve(ts + "-" + sessionId + ".wav");
 
                     final Writer w = new Writer(path, SAMPLE_RATE, CHANNELS, BITS_PER_SAMPLE);
@@ -53,8 +53,8 @@ public class AudioDumpService {
                     if (prev != null) {
                         try { prev.close(); } catch (Exception ignore) {}
                     }
-                    log.info("AUDIO DUMP STARTED: sessionId={}, clientId={}, eventId={}, sr=16000, path={}", 
-                             sessionId, clientId, eventId, path);
+                    log.info("AUDIO DUMP STARTED: sessionId={}, conferenceId={}, eventId={}, sr=16000, path={}", 
+                             sessionId, conferenceId, eventId, path);
                 } catch (Exception e) {
                     log.error("Audio dump start failed: sessionId={}", sessionId, e);
                 }
