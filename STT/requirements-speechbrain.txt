@@ -1,9 +1,0 @@
-# Установка зависимостей для SpeechBrain 
-# (отдельный файл, чтобы не перегружать основной requirements.txt)
-huggingface-hub<0.11.0
-hyperpyyaml>=1.1.0
-joblib>=1.1.0
-packaging>=20.0
-scipy>=1.0.0
-sentencepiece>=0.1.95
-tqdm>=4.60.0

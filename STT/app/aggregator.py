@@ -1,4 +1,4 @@
-import asyncio, time, logging
+import time, logging
 
 from config import CHAR_THRESHOLD, TIME_THRESHOLD
 logger = logging.getLogger(__name__)

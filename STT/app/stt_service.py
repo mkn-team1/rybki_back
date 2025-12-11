@@ -6,18 +6,14 @@ from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.audio_buffer import AudioBufferManager
 from app.aggregator import TextAggregator
-from app.vad import SileroVAD
-from app.vosk_model import VoskManager
 from app.whisper_model import WhisperManager
-from config import MODEL
 
 logger = logging.getLogger(__name__)
 
 
 class STTService:
     def __init__(self):
-        self.vad = SileroVAD()
-        self.model = WhisperManager() if MODEL == "Whisper" else VoskManager()
+        self.model = WhisperManager()
         self.sessions = {}  # key: (clientId, eventId)
         self.backend_ws: Optional[WebSocket] = None
         self._lock = asyncio.Lock()
@@ -78,7 +74,7 @@ class STTService:
 
                     if key not in self.sessions:
                         self.sessions[key] = {
-                            "audio_buffer": AudioBufferManager(self.vad),
+                            "audio_buffer": AudioBufferManager(),
                             "aggregator": TextAggregator(lambda text, meta: self.send_to_backend(text, meta)),
                             "meta": {"clientId": client_id, "eventId": event_id}
                         }
@@ -90,9 +86,6 @@ class STTService:
                     buf.append(audio_bytes)
                     if buf.should_transcribe():
                         pcm = buf.pop_chunk()
-                        if pcm and not self.vad.has_speech(pcm):
-                            logger.debug(f"No speech detected for {client_id}/{event_id}, skipping transcription")
-                            continue
                         result = self.model.transcribe(pcm)
                         text = result.get("text", "").strip()
                         if text:
