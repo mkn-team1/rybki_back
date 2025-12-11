@@ -99,20 +99,6 @@ services:
       retries: 10
       start_period: 10s
 
-  # bot-consumer:
-  #   build:
-  #     context: ./Bot_Consumer
-  #   container_name: bot-consumer
-  #   restart: unless-stopped
-  #   environment:
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #     BACKEND_BASE_URL: http://spring-backend:8080
-  #   depends_on:
-  #     kafka-init:
-  #       condition: service_completed_successfully
-  #     spring-backend:
-  #       condition: service_healthy
-
   spring-backend:
     build:
       context: ./Spring_boot
