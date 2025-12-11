@@ -1,164 +1,129 @@
 import { loadConfig } from "./config";
 import { logger } from "./logger";
-import { createTaskSource } from "./taskSource";
-import { newContextAndPage, closeBrowser } from "./browserManager";
+import { createTaskSource, ITaskSource } from "./taskSource";
 import { JoinConferenceTask } from "./taskTypes";
+import { newContextAndPage, closeBrowser } from "./browserManager";
+import { BasePlatformConnector } from "./platforms/basePlatform";
 import { KonturTalkConnector } from "./platforms/konturTalk";
-import { PlatformConnector } from "./platforms/basePlatform";
 
 const cfg = loadConfig();
-const taskSource = createTaskSource(cfg);
 
-let activeBots = 0;
+const connectors: Record<string, BasePlatformConnector> = {
+  "kontur_talk": new KonturTalkConnector(),
+};
+
 let isShuttingDown = false;
 const runningBots = new Set<AbortController>();
+let taskSource: ITaskSource;
 
-function resolveConnector(platform: JoinConferenceTask["platform"]): PlatformConnector {
-  switch (platform) {
-    case "kontur_talk":
-      return new KonturTalkConnector();
-    default:
-      throw new Error(`Unsupported platform: ${platform}`);
-  }
-}
-
+/**
+ * Основная функция запуска одного бота
+ */
 async function runBot(task: JoinConferenceTask): Promise<void> {
   if (isShuttingDown) return;
 
-  logger.info({ botId: task.botId }, "Bot starting");
-  const { context, page } = await newContextAndPage();
+  logger.info({ botId: task.botId, platform: task.platform }, "Starting bot session");
 
+  // Контроллер для прерывания работы конкретного бота
   const abortController = new AbortController();
   runningBots.add(abortController);
 
-  page.on("console", (msg) => {
-    const text = msg.text();
-
-    if (text.startsWith("[audio-bot]")) {
-      logger.info(
-        { botId: task.botId, type: msg.type() },
-        text
-      );
-    } else if (msg.type() === "error") {
-      logger.error(
-        { botId: task.botId, type: msg.type() },
-        text
-      );
-    }
-  });
-
-
-  page.on("pageerror", (err) => {
-    logger.error({ botId: task.botId, err }, "Page error");
-  });
-
-  const connector = resolveConnector(task.platform);
+  const { context, page } = await newContextAndPage();
 
   try {
-    await taskSource.reportTaskStarted(task.botId);
-    await connector.joinAndStream(task, page, cfg.audioWsUrl, abortController.signal);
-    await taskSource.reportTaskFinished(task.botId, true);
-  } catch (err: any) {
-    if (!isShuttingDown) {
-      logger.error({ botId: task.botId, err }, "Bot failed");
-      await taskSource.reportTaskFinished(
-        task.botId,
-        false,
-        err?.message || String(err)
-      );
+    const connector = connectors[task.platform];
+    if (!connector) {
+      throw new Error(`Platform '${task.platform}' is not supported. Available: ${Object.keys(connectors).join(", ")}`);
     }
-  } finally {
-    runningBots.delete(abortController);
-    await context.close().catch(() => {});
-    activeBots -= 1;
-    logger.info({ activeBots }, "Bot finished");
-  }
-}
 
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
-async function mainLoop() {
-  logger.info(
-    { workerId: cfg.workerId, maxConcurrentBots: cfg.maxConcurrentBots },
-    "Browser-bot worker starting"
-  );
-
-  await taskSource.init();
-
-  let singleRun = true;
-
-  // eslint-disable-next-line no-constant-condition
-  while (!isShuttingDown) {
-    try {
-      if (activeBots >= cfg.maxConcurrentBots) {
-        await sleep(cfg.taskPollIntervalMs);
-        continue;
-      }
-
-      if (singleRun) {
-        const task = await taskSource.fetchNextTask();
-        if (!task) {
-          await sleep(cfg.taskPollIntervalMs);
-          continue;
+    page.on("console", (msg) => {
+        const text = msg.text();
+        if (text.includes("[BOT_COMMAND:LEAVE]")) {
+            logger.info({ botId: task.botId }, "Received LEAVE command via console, aborting...");
+            abortController.abort();
         }
-        activeBots += 1;
-        void runBot(task);
-        singleRun = false;
-      } else {
-        await sleep(cfg.taskPollIntervalMs);
-      }
-    } catch (err: any) {
-      if (!isShuttingDown) {
-        logger.error({ err }, "Error in main loop");
-        await sleep(cfg.taskPollIntervalMs);
-      }
+    });
+
+    await connector.execute(task, page, abortController.signal);
+
+  } catch (error: any) {
+    logger.error({ botId: task.botId, error: error.message }, "Bot session failed with error");
+  } finally {
+
+    runningBots.delete(abortController);
+    
+    try {
+      await context.close();
+    } catch (e) {
+      logger.warn({ botId: task.botId, err: e }, "Error closing context");
     }
   }
 }
 
-async function shutdown(signal: string) {
+/**
+ * Главный цикл поллинга задач
+ */
+async function mainLoop() {
+  logger.info(`Worker ${cfg.workerId} started. Max bots: ${cfg.maxConcurrentBots}. Source: ${cfg.taskSourceType}`);
+
+  taskSource = createTaskSource(cfg);
+  try {
+    await taskSource.init();
+  } catch (e) {
+    logger.fatal(`Failed to init task source: ${e}`);
+    process.exit(1);
+  }
+
+  while (!isShuttingDown) {
+    if (runningBots.size < cfg.maxConcurrentBots) {
+      try {
+        const task = await taskSource.fetchNextTask();
+        
+        if (task) {
+          runBot(task).catch((err) => {
+             logger.error({ err }, "Unexpected error in runBot promise");
+          });
+        } else {
+          await new Promise((r) => setTimeout(r, cfg.taskPollIntervalMs));
+        }
+      } catch (err) {
+        logger.error({ err }, "Error fetching next task");
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+    } else {
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+}
+
+/**
+ * Graceful Shutdown (SIGINT / SIGTERM)
+ */
+async function shutdown() {
   if (isShuttingDown) return;
   isShuttingDown = true;
+  logger.info("Shutting down worker...");
 
-  logger.info({ signal }, "Shutting down worker");
+  if (taskSource) {
+    await taskSource.close();
+  }
 
-  
-  logger.info(`Signaling ${runningBots.size} bots to leave conference...`);
+  logger.info(`Stopping ${runningBots.size} active bots...`);
   for (const controller of runningBots) {
     controller.abort();
   }
 
-  const shutdownStart = Date.now();
-  while (activeBots > 0 && Date.now() - shutdownStart < 10000) {
-    await sleep(500);
-  }
-  
-  if (activeBots > 0) {
-    logger.warn("Some bots did not finish in time, force closing browser.");
-  } else {
-    logger.info("All bots finished gracefully.");
-  }
+  await new Promise(r => setTimeout(r, 2000));
 
-  setTimeout(() => {
-    logger.error("Force exit after shutdown timeout");
-    process.exit(1);
-  }, 10000);
-  
-  try {
-    await closeBrowser();
-    process.exit(0);
-  } catch (err) {
-    logger.error({ err }, "Error during shutdown");
-    process.exit(1);
-  }
+  await closeBrowser();
+  logger.info("Browser closed. Bye.");
+  process.exit(0);
 }
 
-process.on("SIGTERM", () => void shutdown("SIGTERM"));
-process.on("SIGINT", () => void shutdown("SIGINT"));
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
 
 mainLoop().catch((err) => {
-  logger.fatal({ err }, "Fatal error in worker");
+  logger.fatal({ err }, "Main loop crashed");
   process.exit(1);
 });

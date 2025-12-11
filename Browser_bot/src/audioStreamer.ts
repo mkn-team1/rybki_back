@@ -80,11 +80,19 @@ function browserSideWebRtcAudio(params: { audioWsUrl: string; botId: string }) {
      if (!globalSocket) {
          globalSocket = new WebSocket(audioWsUrl);
          globalSocket.binaryType = "arraybuffer";
-         globalSocket.onopen = () => {
-             log("WS Open");
-             // TODO: Передавать реальные ID если нужно
-             globalSocket!.send(JSON.stringify({ type: "start", clientId: "bot", eventId: "meeting" }));
-         };
+         globalSocket.onopen = () => console.log("[audio-bot] WS Open");
+
+         globalSocket.onmessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+
+                if (msg.type === 'leave') {
+                    // Пишем специальный лог, который перехватит Playwright
+                    console.log("[BOT_COMMAND:LEAVE]"); 
+                }
+            } catch (e) {}
+          }
+
          globalSocket.onerror = (e) => log("WS Error", e);
          globalSocket.onclose = (e) => log("WS Closed", e.code);
      }
