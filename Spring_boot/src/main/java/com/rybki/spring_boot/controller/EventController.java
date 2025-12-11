@@ -34,7 +34,7 @@ public class EventController {
     private final EventService eventService;
 
     // Создать событие
-    @PostMapping
+    @PostMapping("/create")
     @Operation(summary = "Create Event", description = "Creates new event. Return UserID")
     @ApiResponse(responseCode = "200", description = "Event Created")
     @ApiResponse(responseCode = "400", description = "Bad Request - validation error")

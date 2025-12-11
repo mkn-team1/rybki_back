@@ -49,6 +49,7 @@ export async function getBrowser(): Promise<Browser> {
         "--disable-hang-monitor",
         "--disable-ipc-flooding-protection",
         "--disable-gpu-rasterization",
+        "--autoplay-policy=no-user-gesture-required",
 
         '--ignore-certificate-errors',
       ]

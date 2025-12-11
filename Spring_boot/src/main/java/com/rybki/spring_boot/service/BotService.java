@@ -39,13 +39,22 @@ public class BotService {
         }
         
         private Mono<Void> removeBot(final String botId) {
-            return Mono.fromRunnable(() -> {
-                    WebSocketSession botSession = sessionService.getBotSession(botId);
+            
+            WebSocketSession botSession = sessionService.getBotSession(botId);
 
-                    if (botSession != null && botSession.isOpen()) {
-                            botSession.send(Mono.just(botSession.textMessage("{\"type\":\"leave\"}"))).subscribe();
-                    }
-            });
+            if (botSession == null || !botSession.isOpen()) {
+                log.warn("🤖 [BOT-SERVICE] No open WebSocket session for botId={}, cannot send leave", botId);
+                return Mono.empty();
+            }
+            return botSession.send(Mono.just(botSession.textMessage("{\"type\":\"leave\"}")))
+                            .doOnSubscribe(s ->
+                                log.info("🤖 [BOT-SERVICE] Sending leave to botId={}", botId)
+                            )
+                            .doOnError(e ->
+                                log.error("🤖 [BOT-SERVICE] Failed to send leave to botId={}", botId, e)
+                            )
+                            .then();
+            
         }
 
         public Mono<Void> handleBotStarted(final String botId) {

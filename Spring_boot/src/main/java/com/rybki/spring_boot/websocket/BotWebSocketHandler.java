@@ -53,8 +53,7 @@ public class BotWebSocketHandler implements WebSocketHandler {
             .doFinally(signal -> {
                 log.info("Bot disconnected: botId={}, sessionId={}, signal={}",
                         botId, session.getId(), signal);
-                botService.handleBotRemoved(botId);
-            }).then()
+            }).then(botService.handleBotRemoved(botId))
         );
     }
 

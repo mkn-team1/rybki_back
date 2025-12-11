@@ -6,7 +6,7 @@ export class KonturTalkConnector extends BasePlatformConnector {
   platformName = "kontur_talk";
 
   protected getInMeetingSelector(): string {
-      return ".toolbar-buttons"; // Селектор тулбара в комнате
+      return ".toolbar-buttons._center"; // Селектор тулбара в комнате
   }
 
   protected async joinRoom(page: Page, task: JoinConferenceTask): Promise<void> {

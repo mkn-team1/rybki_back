@@ -31,8 +31,8 @@ export function loadConfig(): Config {
 
   const taskSourceType = (process.env.TASK_SOURCE_TYPE as TaskSourceType) || "kafka"
   
-  const backendRestUrl = process.env.BACKEND_REST_URL || "http://spring-backend:8080";
-  const audioWsUrl = process.env.AUDIO_WS_URL || "ws://spring-backend:8080/ws/client";
+  const backendRestUrl = process.env.BACKEND_REST_URL || "https://spring-backend:8443";
+  const audioWsUrl = process.env.AUDIO_WS_URL || "wss://spring-backend:8443/ws/bot";
 
   const kafkaBrokers = (process.env.KAFKA_BROKERS || "localhost:9092").split(",");
   const kafkaGroupId = process.env.KAFKA_GROUP_ID || "browser-bot-group";

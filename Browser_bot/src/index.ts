@@ -42,6 +42,12 @@ async function runBot(task: JoinConferenceTask): Promise<void> {
             logger.info({ botId: task.botId }, "Received LEAVE command via console, aborting...");
             abortController.abort();
         }
+
+        if (text.startsWith("[audio-bot]")) {
+            logger.info({ botId: task.botId, type: msg.type() }, text);
+        } else if (msg.type() === "error") {
+            logger.error({ botId: task.botId, type: msg.type() }, text);
+        }
     });
 
     await connector.execute(task, page, abortController.signal);

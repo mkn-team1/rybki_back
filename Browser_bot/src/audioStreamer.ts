@@ -65,11 +65,6 @@ function browserSideWebRtcAudio(params: { audioWsUrl: string; botId: string }) {
              if (!globalSocket || globalSocket.readyState !== WebSocket.OPEN) return;
              
              const input = ev.inputBuffer.getChannelData(0);
-             
-             // Простая проверка на тишину (опционально), чтобы не спамить нулями
-            //  let sum = 0;
-            //  for (let i = 0; i < input.length; i+=50) sum += Math.abs(input[i]);
-            //  if (sum < 0.001) return;
 
              const resampled = resampleTo16k(input, globalCtx!.sampleRate);
              const pcm16 = floatTo16BitPCM(resampled);
@@ -80,7 +75,7 @@ function browserSideWebRtcAudio(params: { audioWsUrl: string; botId: string }) {
      if (!globalSocket) {
          globalSocket = new WebSocket(audioWsUrl);
          globalSocket.binaryType = "arraybuffer";
-         globalSocket.onopen = () => console.log("[audio-bot] WS Open");
+         globalSocket.onopen = () => log("WS Open");
 
          globalSocket.onmessage = (event) => {
             try {

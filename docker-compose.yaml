@@ -158,7 +158,7 @@ services:
       REDIS_QUEUE_KEY: "meeting_tasks"
       BACKEND_REST_URL: "https://spring-backend:8443"
       AUDIO_WS_URL: "wss://spring-backend:8443/ws/bot"
-      MAX_CONCURRENT_BOTS: ${MAX_CONCURRENT_BOTS_PER_INSTANCE}
+      MAX_CONCURRENT_BOTS: ${MAX_CONCURRENT_BOTS_PER_BROWSER}
       # Kafka
       TASK_SOURCE_TYPE: "kafka"
       KAFKA_BROKERS: "kafka:29092"

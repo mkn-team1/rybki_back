@@ -13,7 +13,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rybki.spring_boot.service.BotService;
 import com.rybki.spring_boot.service.IdeaService;
 import com.rybki.spring_boot.service.SessionService;
-import com.rybki.spring_boot.service.SttRoutingService;
 import com.rybki.spring_boot.service.VoteService;
 
 import lombok.RequiredArgsConstructor;
@@ -25,11 +24,10 @@ import reactor.core.publisher.Mono;
 @RequiredArgsConstructor
 public class ClientWebSocketHandler implements WebSocketHandler {
 
-    private static final String CLIENT_ID_PARAM = "conferenceId";
+    private static final String CLIENT_ID_PARAM = "clientId";
     private static final String EVENT_ID_PARAM = "eventId";
 
     private final SessionService sessionService;
-    private final SttRoutingService sttRoutingService;
     private final VoteService voteService;
 
     private final IdeaService ideaService;
@@ -48,8 +46,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                     // case BINARY -> handleBinaryMessage(session, message);
                     default -> Mono.empty();
                 })
-                .doFinally(signal -> handleDisconnect(session))
-                .then();
+                .then(handleDisconnect(session));
     }
 
     private Mono<Void> handleTextMessage(final WebSocketSession session, final WebSocketMessage message) {

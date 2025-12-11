@@ -30,7 +30,7 @@ public class WebSocketConfig {
         final Map<String, WebSocketHandler> map = new HashMap<>();
         map.put("/ws/client", clientWebSocketHandler);
         map.put("/event", clientWebSocketHandler);
-        map.put("/ws/bot", botWebSocketHandler);
+        map.put("/ws/bot/**", botWebSocketHandler);
 
         final SimpleUrlHandlerMapping handlerMapping = new SimpleUrlHandlerMapping();
         handlerMapping.setOrder(Ordered.HIGHEST_PRECEDENCE);

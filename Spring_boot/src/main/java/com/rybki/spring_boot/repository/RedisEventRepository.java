@@ -61,6 +61,9 @@ public class RedisEventRepository {
             }
             final String key = eventKey(eventId);
             final Object result = redisTemplate.opsForValue().get(key);
+            if (result == null) {
+                return Optional.empty();
+            }
             final Event event;
             if (result instanceof Event) {
                 event = (Event) result;
