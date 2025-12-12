@@ -7,8 +7,6 @@ from config import WHISPER_MODEL, BEAM_SIZE, COMPUTE_TYPE, DEVICE, THREADS
 
 logger = logging.getLogger(__name__)
 
-initial_prompt_for_whisper="Стенограмма рабочей встречи. Обсуждение планов, задач и сроков. Привет всем, давайте начнем."
-
 def pick_device():
     if DEVICE:
         return DEVICE
@@ -44,27 +42,31 @@ class WhisperManager:
             language="ru",
             
             beam_size=beam_size,
+            best_of=1,
 
-            best_of=None,
             temperature=0.0,
             patience=1.0,
 
             vad_filter=True,
             vad_parameters=dict(
                 min_silence_duration_ms=500,
-                threshold=0.4,
+                threshold=0.5,
                 speech_pad_ms=300
             ),
 
-            no_speech_threshold=0.5,
-            logprob_threshold=-0.9,
+            log_prob_threshold=-1.0, 
+            no_speech_threshold=0.6,
 
-            initial_prompt=initial_prompt_for_whisper,
+            word_timestamps=True, 
+            hallucination_silence_threshold=2.0,
+
+            repetition_penalty=1.1,
+            no_repeat_ngram_size=0, 
 
             condition_on_previous_text=False,
-            compression_ratio_threshold=2.2,
-            no_repeat_ngram_size=2,
-            word_timestamps=False,
+
+            compression_ratio_threshold=2.4,
+            length_penalty=1.0
         )
         segs = list(segments)
         text = " ".join(s.text for s in segs).strip()
