@@ -30,6 +30,7 @@ public class BotService {
         }
         
         public Mono<Void> disconnectBot(final String conferenceId) {
+            log.info("🤖 [BOT-SERVICE] Disconnecting bot for conferenceId={}", conferenceId);
             final String botId = sessionService.getBotForClient(conferenceId);
             if (botId == null) {
                 log.warn("❌ [BOT-SERVICE] No bot linked to conferenceId={}, cannot disconnect", conferenceId);
@@ -39,7 +40,7 @@ public class BotService {
         }
         
         private Mono<Void> removeBot(final String botId) {
-            
+            log.info("🤖 [BOT-SERVICE] Removing bot: botId={}", botId);
             WebSocketSession botSession = sessionService.getBotSession(botId);
 
             if (botSession == null || !botSession.isOpen()) {
@@ -57,14 +58,17 @@ public class BotService {
             
         }
 
-        public Mono<Void> handleBotStarted(final String botId) {
+        public Mono<Void> handleBotStarted(final WebSocketSession session, final String botId) {
             String conferenceId = sessionService.getClientForBot(botId);
     
             if (conferenceId == null) {
                 return Mono.empty();
             }
+            
             return sessionService.getClientSession(conferenceId).flatMap(cs -> {
-                return audioDumpService.start(cs.getSession().getId(), conferenceId, cs.getEventId());
+                return sessionService.registerBot(botId, session)
+                    .then(audioDumpService.start(cs.getSession().getId(), conferenceId, cs.getEventId())
+                );
             }).then(clientNotificationService.botConnected(conferenceId, botId));
         }
 

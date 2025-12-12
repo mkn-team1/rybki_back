@@ -39,7 +39,7 @@ public class BotWebSocketHandler implements WebSocketHandler {
         }
 
         log.info("Bot connected: botId={}, sessionId={}", botId, session.getId());
-        return botService.handleBotStarted(botId).then(
+        return botService.handleBotStarted(session, botId).then(
             session
             .receive()
             .flatMap(msg -> {

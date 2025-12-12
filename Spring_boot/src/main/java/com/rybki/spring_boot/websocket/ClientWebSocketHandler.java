@@ -39,14 +39,48 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     public @NonNull Mono<Void> handle(@NonNull final WebSocketSession session) {
         log.info("Client connected: sessionId={}", session.getId());
 
-        return registerFromQuery(session)
-                .thenMany(session.receive())
-                .flatMap(message -> switch (message.getType()) {
-                    case TEXT -> handleTextMessage(session, message);
-                    // case BINARY -> handleBinaryMessage(session, message);
-                    default -> Mono.empty();
-                })
-                .then(handleDisconnect(session));
+        final var queryParams = UriComponentsBuilder.fromUri(session.getHandshakeInfo().getUri())
+                .build()
+                .getQueryParams();
+
+        final String eventId = queryParams.getFirst(EVENT_ID_PARAM);
+        final String conferenceId = queryParams.getFirst(CLIENT_ID_PARAM);
+
+        if (!StringUtils.hasText(conferenceId) || !StringUtils.hasText(eventId)) {
+            return session.close();
+        }
+
+        // return sessionService.registerClient(session, conferenceId, eventId)
+        //         .thenMany(session.receive())
+        //         .flatMap(message -> switch (message.getType()) {
+        //             case TEXT -> handleTextMessage(session, message);
+        //             // case BINARY -> handleBinaryMessage(session, message);
+        //             default -> Mono.empty();
+        //         })
+        //         .then(handleClientDisconnect(session, conferenceId));
+
+        Mono<Void> register = sessionService.registerClient(session, conferenceId, eventId);
+
+        Mono<Void> messages = session.receive()
+            .flatMap(msg -> switch (msg.getType()) {
+                case TEXT -> handleTextMessage(session, msg);
+                // case BINARY -> handleBinaryMessage(session, message);
+                default   -> Mono.empty();
+            })
+            .then() 
+            .doFinally(signalType -> {
+                log.info("WS finished: conferenceId={}, sessionId={}, signal={}",
+                        conferenceId, session.getId(), signalType);
+                botService.disconnectBot(conferenceId)
+                    .then(sessionService.unregisterClient(session))
+                    .doOnSuccess(v -> log.info(
+                        "Client disconnected: conferenceId={}, sessionId={}",
+                        conferenceId, session.getId()
+                    ))
+                    .subscribe();
+            });
+
+        return register.then(messages);
     }
 
     private Mono<Void> handleTextMessage(final WebSocketSession session, final WebSocketMessage message) {
@@ -196,7 +230,6 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                     log.info("Connect bot request: conferenceId={}, eventId={}, talkLink={}, platform={}",
                             cs.getConferenceId(), cs.getEventId(), talkLink, platform);
 
-                    // Создать бота
                     return botService.createBot(cs.getConferenceId(), talkLink, platform);
                 })
                 .onErrorResume(e -> {
@@ -215,30 +248,5 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                     log.warn("Disconnect bot from unregistered session or error: sessionId={}", session.getId());
                     return Mono.empty();
                 });
-    }
-
-    @SuppressWarnings("null")
-    private @NonNull Mono<Void> registerFromQuery(final WebSocketSession session) {
-        final var queryParams = UriComponentsBuilder.fromUri(session.getHandshakeInfo().getUri())
-                .build()
-                .getQueryParams();
-
-        final String conferenceId = queryParams.getFirst(CLIENT_ID_PARAM);
-        final String eventId = queryParams.getFirst(EVENT_ID_PARAM);
-
-        if (!StringUtils.hasText(conferenceId) || !StringUtils.hasText(eventId)) {
-            return Mono.empty();
-        }
-
-        return sessionService.registerClient(session, conferenceId, eventId)
-                .doOnSuccess(v -> log.info("Auto-registered from query: conferenceId={}, eventId={}", conferenceId, eventId))
-                .then();
-    }
-
-    private Mono<Void> handleDisconnect(final WebSocketSession session) {
-        return sessionService.getSessionData(session)
-                .flatMap(cs -> botService.disconnectBot(cs.getConferenceId()))
-                .then(sessionService.unregisterClient(session))
-                .doOnSuccess(v -> log.info("Client disconnected: sessionId={}", session.getId()));
     }
 }
