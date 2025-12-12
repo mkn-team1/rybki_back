@@ -38,12 +38,15 @@ public class LlmRequestFactoryService {
         final GigaChatRequestDto.Message systemPrompt = GigaChatRequestDto.getSystemMessage();
         messages.add(systemPrompt);
 
+        if (!foundIdeas.isEmpty()) {
+            messages.add(GigaChatRequestDto.getPreviousIdeasMessage(foundIdeas));
+        }
+
         for (final String currentMessage : this.lastMessages) {
             messages.add(GigaChatRequestDto.getUserMessage(currentMessage));
         }
 
         messages.add(GigaChatRequestDto.getUserMessage(text));
-        messages.add(GigaChatRequestDto.getPreviousIdeasMessage(foundIdeas));
 
         lastMessages.add(text);
         if (lastMessages.size() > MAX_MESSAGES) {
