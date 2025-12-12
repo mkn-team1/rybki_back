@@ -22,4 +22,5 @@ out/
 *.iml
 .DS_Store
 
-audio-dumps/
+audio-dumps/*
+!audio-dumps/.gitkeep
