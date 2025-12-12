@@ -1,0 +1,1 @@
+STT/models/whisper/small/model.bin filter=lfs diff=lfs merge=lfs -text
