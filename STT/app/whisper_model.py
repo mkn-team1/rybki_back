@@ -1,3 +1,4 @@
+from mimetypes import init
 import logging, time
 import numpy as np
 import torch
@@ -5,6 +6,8 @@ from faster_whisper import WhisperModel
 from config import WHISPER_MODEL, BEAM_SIZE, COMPUTE_TYPE, DEVICE, THREADS
 
 logger = logging.getLogger(__name__)
+
+initial_prompt_for_whisper="Стенограмма рабочей встречи. Обсуждение планов, задач и сроков. Привет всем, давайте начнем."
 
 def pick_device():
     if DEVICE:
@@ -38,17 +41,30 @@ class WhisperManager:
         segments, info = self.model.transcribe(
             arr,
             task="transcribe",
+            language="ru",
+            
+            beam_size=beam_size,
+
+            best_of=None,
+            temperature=0.0,
+            patience=1.0,
+
             vad_filter=True,
             vad_parameters=dict(
                 min_silence_duration_ms=500,
-                threshold=0.5
+                threshold=0.4,
+                speech_pad_ms=300
             ),
-            # no_speech_threshold=0.6
-            beam_size=beam_size,
-            language="ru",
+
+            no_speech_threshold=0.5,
+            logprob_threshold=-0.9,
+
+            initial_prompt=initial_prompt_for_whisper,
+
             condition_on_previous_text=False,
+            compression_ratio_threshold=2.2,
             no_repeat_ngram_size=2,
-            temperature=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+            word_timestamps=False,
         )
         segs = list(segments)
         text = " ".join(s.text for s in segs).strip()
