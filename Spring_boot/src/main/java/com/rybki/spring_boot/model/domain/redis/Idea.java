@@ -1,7 +1,5 @@
 package com.rybki.spring_boot.model.domain.redis;
 
-import java.time.Instant;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -20,12 +18,12 @@ public class Idea {
     private String title;
     private String description;
     private IdeaStatus status; // PENDING, ACCEPTED, REJECTED
-    private Instant createdAt;
+    private String createdAt;
     private String author; // имя автора
     private Integer likes;
     private Integer dislikes;
     private String myReaction; // null, "like", "dislike"
-    private Instant promotedToGlobalAt;
-    private Instant promotedToGoldenAt;
+    private String promotedToGlobalAt;
+    private String promotedToGoldenAt;
     private String sourceText; // оригинальный текст от STT
 }

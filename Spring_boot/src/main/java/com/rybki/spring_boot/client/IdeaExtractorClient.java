@@ -47,6 +47,9 @@ public class IdeaExtractorClient {
 
         final LlmRequest request = requestFactoryService.createIdeaExtractionRequest(text);
 
+        for (final var message : request.getMessages()) {
+            log.info("📝 [IDEA_EXTRACTOR] Request message content: {}", message.getContent());
+        }
         return llmClient.sendRequest(request)
                 .flatMap(this::parseResponse)
                 .doOnSuccess(ideas -> {
@@ -72,6 +75,10 @@ public class IdeaExtractorClient {
     private Mono<List<Idea>> parseResponse(final LlmResponse response) {
         final String content = response.getContent();
 
+        log.info("📥 [IDEA_EXTRACTOR] Raw response from {}: {}",
+                llmClient.getProviderName(),
+                content != null ? (content.length() > 500 ? content.substring(0, 500) + "..." : content) : "NULL");
+
         if (content == null || content.isEmpty()) {
             log.warn("⚠️ [IDEA_EXTRACTOR] Empty response content");
             return Mono.just(Collections.emptyList());
@@ -89,10 +96,15 @@ public class IdeaExtractorClient {
      */
     private Mono<List<Idea>> parseJsonResponse(final String jsonContent) {
         try {
+            log.info("🔍 [IDEA_EXTRACTOR] Parsing JSON response, length: {}", jsonContent.length());
             final NnResponseDto nnResponse = objectMapper.readValue(jsonContent, NnResponseDto.class);
 
+            log.info("📊 [IDEA_EXTRACTOR] Parsed response - status: {}, ideas count: {}",
+                    nnResponse.status(),
+                    nnResponse.ideas() != null ? nnResponse.ideas().size() : "null");
+
             if (NO_IDEAS_STATUS.equalsIgnoreCase(nnResponse.status())) {
-                log.info("ℹ️ [IDEA_EXTRACTOR] No ideas found in response");
+                log.info("ℹ️ [IDEA_EXTRACTOR] No ideas found in response (status=no_ideas_found)");
                 return Mono.just(Collections.emptyList());
             }
 

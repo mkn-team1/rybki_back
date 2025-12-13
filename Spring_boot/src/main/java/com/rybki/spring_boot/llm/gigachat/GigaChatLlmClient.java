@@ -11,6 +11,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import com.rybki.spring_boot.llm.contract.LlmClient;
 import com.rybki.spring_boot.llm.contract.LlmRequest;
 import com.rybki.spring_boot.llm.contract.LlmResponse;
+import com.rybki.spring_boot.llm.gigachat.dto.GigaChatRequestDto;
 import com.rybki.spring_boot.llm.gigachat.dto.GigaChatResponseDto;
 
 import lombok.RequiredArgsConstructor;
@@ -39,10 +40,14 @@ public class GigaChatLlmClient implements LlmClient {
 
     @Override
     public Mono<LlmResponse> sendRequest(final LlmRequest request) {
-        log.debug("📤 [GIGACHAT] Sending request to GigaChat API");
+        log.info("📤 [GIGACHAT] Sending request to GigaChat API");
 
-        final GigaChatRequestBuilder requestBuilder = new GigaChatRequestBuilder(request);
-        final Object gigaChatRequest = requestBuilder.build();
+        final GigaChatRequestDto gigaChatRequest = buildGigaChatRequest(request);
+
+        log.info("🔍 [GIGACHAT] Request built with {} messages, stream: {}, model: {}",
+                gigaChatRequest.messages().size(),
+                gigaChatRequest.stream(),
+                gigaChatRequest.model());
 
         return authProvider.getAccessToken()
                 .flatMap(accessToken -> {
@@ -50,6 +55,8 @@ public class GigaChatLlmClient implements LlmClient {
                         log.warn("❌ [GIGACHAT] No access token available");
                         return Mono.error(new RuntimeException("No access token available"));
                     }
+
+                    log.info("🔐 [GIGACHAT] Got access token, sending to API: {}", apiUrl);
 
                     return webClient.post()
                             .uri(apiUrl)
@@ -60,53 +67,44 @@ public class GigaChatLlmClient implements LlmClient {
                             .retrieve()
                             .bodyToMono(GigaChatResponseDto.class)
                             .timeout(Duration.ofSeconds(timeoutSeconds))
-                            .doOnNext(response -> log.debug("📥 [GIGACHAT] Response: {}", response))
+                            .doOnNext(response -> {
+                                log.info("📥 [GIGACHAT] Got response from API - choices count: {}, model: {}",
+                                        response.choices() != null ? response.choices().size() : 0,
+                                        response.model());
+                                if (response.choices() != null && !response.choices().isEmpty()) {
+                                    final String content = response.choices().getFirst().message().content();
+                                    log.info("💬 [GIGACHAT] Response content length: {}, preview: {}",
+                                            content.length(),
+                                            content.length() > 200 ? content.substring(0, 200) + "..." : content);
+                                }
+                            })
                             .map(GigaChatResponseAdapter::new)
                             .doOnSuccess(response -> log.info("✅ [GIGACHAT] Request processed successfully"))
                             .doOnError(e -> log.error("❌ [GIGACHAT] Request failed: {}", e.getMessage(), e));
                 });
     }
 
+    /**
+     * Преобразует LlmRequest в GigaChatRequestDto.
+     */
+    private GigaChatRequestDto buildGigaChatRequest(final LlmRequest request) {
+        final List<GigaChatRequestDto.Message> messages = request.getMessages()
+                .stream()
+                .map(msg -> new GigaChatRequestDto.Message(msg.getRole(), msg.getContent()))
+                .toList();
+
+        final LlmRequest.GenerationParams params = request.getGenerationParams();
+
+        return new GigaChatRequestDto(
+                PROVIDER_NAME,
+                messages,
+                params.isStream(),
+                params.getUpdateInterval());
+    }
+
     @Override
     public String getProviderName() {
         return PROVIDER_NAME;
-    }
-
-    /**
-     * Конвертирует LlmRequest в объект для отправки GigaChat API.
-     */
-    private static class GigaChatRequestBuilder {
-
-        private final LlmRequest request;
-
-        GigaChatRequestBuilder(final LlmRequest request) {
-            this.request = request;
-        }
-
-        Object build() {
-            final List<MessageDto> messages = request.getMessages()
-                    .stream()
-                    .map(msg -> new MessageDto(msg.getRole(), msg.getContent()))
-                    .toList();
-
-            final LlmRequest.GenerationParams params = request.getGenerationParams();
-
-            return new GigaChatRequestPayload(
-                    GigaChatLlmClient.PROVIDER_NAME,
-                    messages,
-                    params.isStream(),
-                    params.getUpdateInterval());
-        }
-
-        private record MessageDto(String role, String content) {
-        }
-
-        private record GigaChatRequestPayload(
-                String model,
-                List<MessageDto> messages,
-                boolean stream,
-                int updateInterval) {
-        }
     }
 
     /**

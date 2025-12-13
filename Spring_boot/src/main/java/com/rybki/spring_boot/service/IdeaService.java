@@ -50,22 +50,24 @@ public class IdeaService {
     }
 
     private Mono<Void> createAndSendIdea(String conferenceId, String conferenceName, String eventId, Idea idea) {
+        final String safeName = conferenceName != null && !conferenceName.isEmpty() ? conferenceName : "Anonymous";
         final com.rybki.spring_boot.model.domain.redis.Idea redisIdea = com.rybki.spring_boot.model.domain.redis.Idea
                 .builder()
                 .ideaId(UUID.randomUUID().toString())
                 .eventId(eventId)
                 .conferenceId(conferenceId)
-                .conferenceName(conferenceName)
+                .conferenceName(safeName)
                 .title(idea.title())
                 .description(idea.description())
                 .status(IdeaStatus.PENDING)
-                .createdAt(Instant.now())
-                .author(conferenceName)
+                .createdAt(Instant.now().toString())
+                .author(safeName)
                 .likes(0)
                 .dislikes(0)
                 .myReaction(null)
                 .promotedToGlobalAt(null)
                 .promotedToGoldenAt(null)
+                .sourceText("")
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(redisIdea))
@@ -74,22 +76,24 @@ public class IdeaService {
                         redisIdea.getTitle()));
     }
 
-    public Mono<Void> createIdeaFromFront(String conferenceId, String conferenceName, String eventId, String title,
-            String description) {
+    public Mono<Void> createIdeaFromFront(final String conferenceId, final String conferenceName,
+            final String eventId, final String title, final String description) {
+        final String safeName = conferenceName != null && !conferenceName.isEmpty() ? conferenceName : "Anonymous";
         final com.rybki.spring_boot.model.domain.redis.Idea idea = com.rybki.spring_boot.model.domain.redis.Idea
                 .builder()
                 .ideaId(UUID.randomUUID().toString())
                 .eventId(eventId)
                 .conferenceId(conferenceId)
-                .conferenceName(conferenceName)
+                .conferenceName(safeName)
                 .title(title)
                 .description(description)
                 .status(IdeaStatus.PENDING)
-                .createdAt(Instant.now())
-                .author(conferenceName)
+                .createdAt(Instant.now().toString())
+                .author(safeName)
                 .likes(0)
                 .dislikes(0)
                 .myReaction(null)
+                .sourceText("")
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
