@@ -30,16 +30,15 @@ public class LlmRequestFactoryService {
      * @return LLM запрос
      */
     public LlmRequest createIdeaExtractionRequest(final String text) {
-        log.info("🏭 [LLM_REQUEST_FACTORY] Creating idea extraction request");
-        log.info("📊 [LLM_REQUEST_FACTORY] Current context - lastMessages: {}, foundIdeas: {}",
-                lastMessages.size(), foundIdeas.size());
 
         final List<GigaChatRequestDto.Message> messages = new LinkedList<>();
         final GigaChatRequestDto.Message systemPrompt = GigaChatRequestDto.getSystemMessage();
         messages.add(systemPrompt);
 
         if (!foundIdeas.isEmpty()) {
-            messages.add(GigaChatRequestDto.getPreviousIdeasMessage(foundIdeas));
+            final GigaChatRequestDto.Message previousIdeasMessage =
+                    GigaChatRequestDto.getPreviousIdeasMessage(foundIdeas);
+            messages.add(previousIdeasMessage);
         }
 
         for (final String currentMessage : this.lastMessages) {
@@ -51,13 +50,13 @@ public class LlmRequestFactoryService {
         lastMessages.add(text);
         if (lastMessages.size() > MAX_MESSAGES) {
             final String removedMessage = lastMessages.poll();
-            log.info("🗑️ [LLM_REQUEST_FACTORY] Removed oldest message from context {}, current size: {}",
+            log.debug("🗑️ [LLM_REQUEST_FACTORY] Removed oldest message from context {}, current size: {}",
                     removedMessage, lastMessages.size());
         }
 
         final LlmRequest request = new LlmRequestImpl(messages);
 
-        log.info("✅ [LLM_REQUEST_FACTORY] Request created with {} messages total", messages.size());
+        log.debug("✅ [LLM_REQUEST_FACTORY] Request created with {} messages total", messages.size());
 
         return request;
     }
@@ -69,21 +68,19 @@ public class LlmRequestFactoryService {
      */
     public void addFoundIdeas(final List<String> newIdeas) {
         if (newIdeas == null || newIdeas.isEmpty()) {
-            log.info("📭 [LLM_REQUEST_FACTORY] No new ideas to add - list is null or empty");
+            log.debug("📭 [LLM_REQUEST_FACTORY] No new ideas to add - list is null or empty");
             return;
         }
 
-        log.info("💾 [LLM_REQUEST_FACTORY] Adding {} new ideas to context", newIdeas.size());
-        log.info("📊 [LLM_REQUEST_FACTORY] Current context size before: {}", foundIdeas.size());
+        log.debug("💾 [LLM_REQUEST_FACTORY] Adding {} new ideas to context", newIdeas.size());
 
         if (foundIdeas.size() > MAX_MESSAGES) {
             final List<String> removedIdea = foundIdeas.poll();
-            log.info("🗑️ [LLM_REQUEST_FACTORY] Removed oldest idea: {}", removedIdea);
+            log.debug("🗑️ [LLM_REQUEST_FACTORY] Removed oldest idea: {}", removedIdea);
         }
 
         foundIdeas.add(newIdeas);
-        log.info("💡 [LLM_REQUEST_FACTORY] Added ideas to context: {}", newIdeas);
-        log.info("✅ [LLM_REQUEST_FACTORY] Context updated. Total ideas in memory: {}", foundIdeas.size());
+        log.debug("✅ [LLM_REQUEST_FACTORY] Context updated. Total ideas in memory: {}", foundIdeas.size());
     }
 
     /**

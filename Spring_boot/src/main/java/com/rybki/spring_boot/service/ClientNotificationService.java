@@ -148,7 +148,6 @@ public class ClientNotificationService {
                     }
                 })
                 .collectList()
-                .doOnNext(list -> log.info("📡 [BROADCAST] Broadcasting to {} sessions for eventId={}", list.size(), eventId))
                 .then()
                 .doOnSuccess(v -> log.info("✅ [BROADCAST] Broadcast message type={} to event={} completed",
                         message.get("type"), eventId))

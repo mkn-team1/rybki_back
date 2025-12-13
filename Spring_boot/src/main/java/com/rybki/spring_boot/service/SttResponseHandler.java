@@ -29,13 +29,13 @@ public class SttResponseHandler {
                 final String eventId = node.path("eventId").asText();
                 final String text = node.path("text").asText();
 
-                log.info("Received final_text from STT: conferenceId={}, eventId={}, text={}",
+                log.info("📤 [STT] Received final_text from STT: conferenceId={}, eventId={}, text={}",
                         conferenceId, eventId, text);
 
                 
-                sessionService.getClientSession(conferenceId).doOnNext(cs -> 
-                    ideaService.processText(conferenceId, cs.getConferenceName(), eventId, text)
-                ).subscribe(); 
+                sessionService.getClientSession(conferenceId)
+                        .flatMap(cs -> ideaService.processText(conferenceId, cs.getConferenceName(), eventId, text))
+                        .subscribe();
                 
             } else {
                 log.debug("Unknown STT message type: {}", type);

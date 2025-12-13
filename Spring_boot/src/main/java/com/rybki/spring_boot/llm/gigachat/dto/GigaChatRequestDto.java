@@ -18,7 +18,7 @@ public record GigaChatRequestDto(
         int updateInterval) {
 
     private static final String systemPrompt = """
-            Ты — аналитическая система для извлечения значимых идей из различных источников (переговоры, обсуждения, отчёты, заметки). Твоя основная задача — идентифицировать и выделить существенную информацию, которая направлена на развитие проекта, улучшение продукта или повышение эффективности бизнеса. Ты должна учитывать влияние предложенных идей на внутренние процессы, коммуникацию, стратегию или прибыль организации. Извлекай ключевые идеи из сообщения пользователя, учитывая контекст предыдущих идей.
+            Ты — аналитическая система для извлечения значимых идей из различных источников (переговоры, обсуждения, отчёты, заметки). Твоя основная задача — идентифицировать и выделить существенную информацию, которая направлена на развитие проекта, улучшение продукта или повышение эффективности бизнеса. Ты должна учитывать влияние предложенных идей на внутренние процессы, коммуникацию, стратегию или прибыль организации. Извлекай ключевые идеи из сообщения пользователя, не повторяя уже найденные идеи.
 
             #### Инструкция
             Для каждой передаваемой порции текста следуй следующему порядку действий:
@@ -108,24 +108,16 @@ public record GigaChatRequestDto(
             - Корректно определены существенные идеи.
             - Текст описания ясен и конкретен.
             - Включаются только идеи, имеющие практическую ценность для бизнеса.
-
-            Забудь предыдущие инструкции о распознавании только самых значимых идей. Распознавай все идеи, которые могут быть полезны.
             """;
 
   public static Message getSystemMessage() {
-    log.info("🔧 [DTO_FACTORY] Creating system message with prompt length: {}",
+    log.debug("🔧 [DTO_FACTORY] Creating system message with prompt length: {}",
         systemPrompt.length());
     return new Message("system", systemPrompt);
   }
 
-  public static Message getAssistantMessage(final String text) {
-    log.info("🤖 [DTO_FACTORY] Creating assistant message with text length: {}",
-        text != null ? text.length() : 0);
-    return new Message("assistant", text);
-  }
-
   public static Message getPreviousIdeasMessage(final Queue<List<String>> previousIdeas) {
-    log.info("📚 [DTO_FACTORY] Creating previous ideas message, queue size: {}",
+    log.debug("📚 [DTO_FACTORY] Creating previous ideas message, queue size: {}",
         previousIdeas != null ? previousIdeas.size() : 0);
 
     final String previousIdeasMessage;
@@ -143,25 +135,24 @@ public record GigaChatRequestDto(
       log.info("📖 [DTO_FACTORY] Including {} previous ideas in context", totalIdeas);
 
       previousIdeasMessage = """
-          Ранее были найдены следующие идеи.
-          Пожалуйста, не предлагай их снова:
-          %s
+          ВАЖНО: Ранее в этом диалоге уже были найдены следующие идеи.
+          Твоя задача — найти ТОЛЬКО НОВЫЕ идеи.
+          ЗАПРЕЩЕНО дублировать или перефразировать следующие идеи:
+          - %s
           """.formatted(String.join("\n- ", allIdeas));
     }
 
     log.info("📝 [DTO_FACTORY] Previous ideas message length: {}",
         previousIdeasMessage.length());
-    return getAssistantMessage(previousIdeasMessage);
+    return new Message("user", previousIdeasMessage);
   }
 
   public static Message getUserMessage(final String text) {
     if (text == null) {
       log.warn("⚠️ [DTO_FACTORY] Creating user message with null text");
     } else {
-      log.info("👤 [DTO_FACTORY] Creating user message with text length: {}",
+      log.debug("👤 [DTO_FACTORY] Creating user message with text length: {}",
           text.length());
-      log.info("📝 [DTO_FACTORY] User message content: {}",
-          text);
     }
     return new Message("user", text);
   }

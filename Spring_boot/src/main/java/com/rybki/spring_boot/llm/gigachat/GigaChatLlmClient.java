@@ -44,10 +44,6 @@ public class GigaChatLlmClient implements LlmClient {
 
         final GigaChatRequestDto gigaChatRequest = buildGigaChatRequest(request);
 
-        log.info("🔍 [GIGACHAT] Request built with {} messages, stream: {}, model: {}",
-                gigaChatRequest.messages().size(),
-                gigaChatRequest.stream(),
-                gigaChatRequest.model());
 
         return authProvider.getAccessToken()
                 .flatMap(accessToken -> {
@@ -55,8 +51,6 @@ public class GigaChatLlmClient implements LlmClient {
                         log.warn("❌ [GIGACHAT] No access token available");
                         return Mono.error(new RuntimeException("No access token available"));
                     }
-
-                    log.info("🔐 [GIGACHAT] Got access token, sending to API: {}", apiUrl);
 
                     return webClient.post()
                             .uri(apiUrl)
@@ -67,17 +61,6 @@ public class GigaChatLlmClient implements LlmClient {
                             .retrieve()
                             .bodyToMono(GigaChatResponseDto.class)
                             .timeout(Duration.ofSeconds(timeoutSeconds))
-                            .doOnNext(response -> {
-                                log.info("📥 [GIGACHAT] Got response from API - choices count: {}, model: {}",
-                                        response.choices() != null ? response.choices().size() : 0,
-                                        response.model());
-                                if (response.choices() != null && !response.choices().isEmpty()) {
-                                    final String content = response.choices().getFirst().message().content();
-                                    log.info("💬 [GIGACHAT] Response content length: {}, preview: {}",
-                                            content.length(),
-                                            content.length() > 200 ? content.substring(0, 200) + "..." : content);
-                                }
-                            })
                             .map(GigaChatResponseAdapter::new)
                             .doOnSuccess(response -> log.info("✅ [GIGACHAT] Request processed successfully"))
                             .doOnError(e -> log.error("❌ [GIGACHAT] Request failed: {}", e.getMessage(), e));

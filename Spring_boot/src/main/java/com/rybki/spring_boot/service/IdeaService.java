@@ -38,11 +38,11 @@ public class IdeaService {
 
     private Mono<Void> processIdeas(String conferenceId, String conferenceName, String eventId, List<Idea> ideas) {
         if (ideas == null || ideas.isEmpty()) {
-            log.info("⚠️ [IDEA-SERVICE] No ideas found for conferenceId={}, eventId={}", conferenceId, eventId);
+            log.debug("⚠️ [IDEA-SERVICE] No ideas found for conferenceId={}, eventId={}", conferenceId, eventId);
             return Mono.empty();
         }
 
-        log.info("💡 [IDEA-SERVICE] Found {} ideas", ideas.size());
+        log.debug("💡 [IDEA-SERVICE] Found {} ideas", ideas.size());
 
         return Flux.fromIterable(ideas)
                 .flatMap(idea -> createAndSendIdea(conferenceId, conferenceName, eventId, idea))
