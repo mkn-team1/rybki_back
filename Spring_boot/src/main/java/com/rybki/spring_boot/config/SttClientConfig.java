@@ -20,12 +20,10 @@ public class SttClientConfig {
     @Bean
     public SttWebSocketClient sttWebSocketClient(final SttResponseHandler responseHandler) {
         final Duration reconnectInitial = Duration.ofSeconds(1);
-        final Duration reconnectMax = Duration.ofSeconds(30);
 
         final SttWebSocketClient client = new SttWebSocketClient(
             sttUrl,
             reconnectInitial,
-            reconnectMax,
             responseHandler
         );
 

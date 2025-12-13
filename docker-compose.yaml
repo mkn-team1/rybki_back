@@ -70,48 +70,30 @@ services:
   stt-service:
     build:
       context: ./STT
-      args:
-        MODEL: ${MODEL}
     container_name: stt-service
     restart: unless-stopped
     ports:
       - "8081:8081"
     environment:
-      MODEL: ${MODEL}
       MIN_SEND_S: ${MIN_SEND_S}
       PREFERRED_SEND_S: ${PREFERRED_SEND_S}
-      MAX_SEND_S: ${MAX_SEND_S}
-      SILENCE_AFTER_S: ${SILENCE_AFTER_S}
       CHAR_THRESHOLD: ${CHAR_THRESHOLD}
       TIME_THRESHOLD: ${TIME_THRESHOLD}
       STT_PORT: 8081
 
       # Whisper params
       THREADS: 12
-      CHUNK_SIZE_S: 10
       BEAM_SIZE: 1
       COMPUTE_TYPE: int8 # "float16" for GPU or "int8" for CPU
       DEVICE: CPU # "GPU" or "CPU"
+    volumes:
+      - ./STT/models:/app/models
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
-
-  # bot-consumer:
-  #   build:
-  #     context: ./Bot_Consumer
-  #   container_name: bot-consumer
-  #   restart: unless-stopped
-  #   environment:
-  #     KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-  #     BACKEND_BASE_URL: http://spring-backend:8080
-  #   depends_on:
-  #     kafka-init:
-  #       condition: service_completed_successfully
-  #     spring-backend:
-  #       condition: service_healthy
 
   spring-backend:
     build:

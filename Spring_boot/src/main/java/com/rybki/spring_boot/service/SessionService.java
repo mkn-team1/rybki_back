@@ -30,7 +30,8 @@ public class SessionService {
     // Регистрирует новую WS-сессию клиента
     public Mono<Void> registerClient(final WebSocketSession session, final String conferenceId,
             final String eventId) {
-        return registerClient(session, conferenceId, "", eventId);
+        return registerClient(session, conferenceId, "", eventId)
+                .doOnSuccess(v -> log.info("Registered client: conferenceId={}, eventId={}", conferenceId, eventId));
     }
 
     public Mono<Void> registerClient(final WebSocketSession session, final String conferenceId,
@@ -38,7 +39,7 @@ public class SessionService {
         return Mono.fromRunnable(() -> {
             clientSessions.put(session.getId(), ClientSession.builder().conferenceId(conferenceId)
                     .conferenceName(conferenceName).eventId(eventId).session(session).build());
-            log.debug("Registered session: sessionId={}, conferenceId={}, eventId={}",
+            log.info("Registered session: sessionId={}, conferenceId={}, eventId={}",
                     session.getId(), conferenceId, eventId);
 
         });
@@ -52,7 +53,14 @@ public class SessionService {
     }
 
     public Mono<ClientSession> getSessionData(final WebSocketSession session) {
-        return Mono.justOrEmpty(clientSessions.get(session.getId()));
+        ClientSession cs = clientSessions.get(session.getId());
+        if (cs == null) {
+            log.warn("No ClientSession found for sessionId={}", session.getId());
+        } else {
+            log.info("Retrieved ClientSession: sessionId={}, conferenceId={}, eventId={}",
+                    session.getId(), cs.getConferenceId(), cs.getEventId());
+        }
+        return Mono.justOrEmpty(cs);
     }
 
     // Получить все сессии для конкретного event

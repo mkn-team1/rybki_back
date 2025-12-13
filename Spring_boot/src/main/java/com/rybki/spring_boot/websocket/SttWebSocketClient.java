@@ -18,7 +18,6 @@ public class SttWebSocketClient {
 
     private final String sttUrl;
     private final Duration reconnectInitialDelay;
-    private final Duration reconnectMaxDelay;
     private final SttResponseHandler responseHandler;
 
     private final ReactorNettyWebSocketClient client = new ReactorNettyWebSocketClient();
@@ -83,7 +82,6 @@ public class SttWebSocketClient {
 
         })
         .retryWhen(reactor.util.retry.Retry.backoff(Long.MAX_VALUE, reconnectInitialDelay)
-            .maxBackoff(reconnectMaxDelay)
             .doBeforeRetry(s -> log.warn("🔄 Reconnecting STT... Attempt {}", s.totalRetries() + 1))
         )
         .subscribe(
