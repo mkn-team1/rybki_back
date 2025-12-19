@@ -107,6 +107,9 @@ public class ClientNotificationService {
                 "answer", answer));
     }
 
+    /**
+     * Send message about current micro state
+     */
     public Mono<Void> sendMicSwitchNotification(final String conferenceId, final Boolean micMuted) {
         return sendToClient(conferenceId, Map.of(
                 "type", "mic_switch",
