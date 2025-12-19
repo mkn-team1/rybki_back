@@ -31,23 +31,16 @@ public class RedisIdeaRepository {
     }
 
     public void moveIdeaToAccepted(final String ideaId, final String eventId) {
-        final Idea idea = findIdeaById(ideaId).orElseThrow();
-        idea.setStatus(IdeaStatus.ACCEPTED);
-
-        final String ideaKey = RedisKeys.ideaKey(ideaId);
-        redisTemplate.opsForValue().set(ideaKey, idea);
-
-        // Перемещаем между sets
-        final String pendingKey = RedisKeys.eventPendingIdeasKey(eventId);
-        final String acceptedKey = RedisKeys.eventAcceptedIdeasKey(eventId);
-
-        redisTemplate.opsForSet().remove(pendingKey, ideaId);
-        redisTemplate.opsForSet().add(acceptedKey, ideaId);
+        moveIdeaToStatus(ideaId, eventId, IdeaStatus.ACCEPTED);
     }
 
     public void moveIdeaToRejected(final String ideaId, final String eventId) {
+        moveIdeaToStatus(ideaId, eventId, IdeaStatus.REJECTED);
+    }
+
+    private void moveIdeaToStatus(final String ideaId, final String eventId, final IdeaStatus status) {
         final Idea idea = findIdeaById(ideaId).orElseThrow();
-        idea.setStatus(IdeaStatus.ACCEPTED);
+        idea.setStatus(status);
 
         final String ideaKey = RedisKeys.ideaKey(ideaId);
         redisTemplate.opsForValue().set(ideaKey, idea);
