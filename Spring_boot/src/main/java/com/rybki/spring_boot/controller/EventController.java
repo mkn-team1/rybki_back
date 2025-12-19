@@ -6,8 +6,6 @@ import com.rybki.spring_boot.model.domain.api.event.end.EndEventRequest;
 import com.rybki.spring_boot.model.domain.api.event.end.EndEventResponse;
 import com.rybki.spring_boot.model.domain.api.event.join.JoinEventRequest;
 import com.rybki.spring_boot.model.domain.api.event.join.JoinEventResponse;
-import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventRequest;
-import com.rybki.spring_boot.model.domain.api.event.leave.LeaveEventResponse;
 import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventRequest;
 import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventResponse;
 import com.rybki.spring_boot.service.EventService;
