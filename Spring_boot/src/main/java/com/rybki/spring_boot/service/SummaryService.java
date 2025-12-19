@@ -79,13 +79,17 @@ public class SummaryService {
                     style != null ? style : "detailed", inputText
             );
 
+            /**
+             * на будущее: если идей много, возможно стоит отправлять понемногу ему по особенному
+             */
+
             // 3. Формируем LLM request через фабрику
             LlmRequest request = llmRequestFactoryService.createCustomRequest(prompt);
 
             // 4. Отправляем на LLM и возвращаем результат
             return llmClient.sendRequest(request)
                     .map(LlmResponse::getContent)
-                    .doOnSuccess(s -> log.info("✅ [SUMMARY] Summary generated for eventId={}", eventId))
+                    .doOnSuccess(s -> log.info("✅ [SUMMARY] Generated summary: {}", s != null && s.length() > 200 ? s.substring(0, 200) + "..." : s))
                     .doOnError(e -> log.error("❌ [SUMMARY] Failed to generate summary for eventId={}", eventId, e));
         });
     }

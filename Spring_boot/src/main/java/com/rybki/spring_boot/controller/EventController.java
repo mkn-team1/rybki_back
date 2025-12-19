@@ -14,6 +14,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Mono;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -86,16 +88,26 @@ public class EventController {
     // }
 
     // Получить сводку события
-    @GetMapping("/{eventId}/summary")
+    /*@GetMapping("/{eventId}/summary")
     @Operation(summary = "Summarize Event", description = "Get Event Summary")
-    @ApiResponse(responseCode = "200", description = "Event summary retrieved")
-    @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
-    @ApiResponse(responseCode = "404", description = "Event not found")
-    @ApiResponse(responseCode = "500", description = "Internal Server Error")
     public ResponseEntity<SummarizeEventResponse> summarizeEvent(final @PathVariable String eventId,
         final @RequestBody @Valid SummarizeEventRequest summarizeEventRequest) {
         final SummarizeEventResponse response = eventService.summarizeEvent(eventId, summarizeEventRequest);
         return ResponseEntity.ok(response);
+    }*/    
+
+    /*@ApiResponse(responseCode = "200", description = "Event summary retrieved")
+    @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
+    @ApiResponse(responseCode = "404", description = "Event not found")
+    @ApiResponse(responseCode = "500", description = "Internal Server Error")*/
+    // Получить сводку события
+    @GetMapping("/{eventId}/summary")
+    @Operation(summary = "Summarize Event", description = "Get Event Summary")
+    public Mono<ResponseEntity<SummarizeEventResponse>> summarizeEvent(
+            final @PathVariable String eventId,
+            final @RequestBody @Valid SummarizeEventRequest summarizeEventRequest) {
+
+        return eventService.summarizeEvent(eventId, summarizeEventRequest)
+                .map(summary -> ResponseEntity.ok(summary));
     }
-    
 }
