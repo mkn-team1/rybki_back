@@ -69,7 +69,8 @@ public class BotService {
                 return sessionService.registerBot(botId, session)
                     .then(audioDumpService.start(cs.getSession().getId(), conferenceId, cs.getEventId())
                 );
-            }).then(clientNotificationService.botConnected(conferenceId, botId));
+            }).then(clientNotificationService.botConnected(conferenceId, botId))
+            .then(clientNotificationService.sendMicSwitchNotification(conferenceId, false));
         }
 
         public Mono<Void> handleBotRemoved(final String botId) {
@@ -77,8 +78,25 @@ public class BotService {
 
             return sessionService.getClientSession(conferenceId).flatMap(cs -> {
                 return audioDumpService.stop(cs.getSession().getId())
+                .then(clientNotificationService.sendMicSwitchNotification(conferenceId, true))
                 .then(sessionService.unregisterBot(botId))
                 .then(clientNotificationService.botDisconnected(conferenceId, botId));
             });
+        }
+
+        public Boolean isMicMuted(final String botId) {
+            return sessionService.isBotMicMuted(botId);
+        }
+
+        public Mono<Void> switchMic(final String conferenceId) {
+            String botId = sessionService.getBotForClient(conferenceId);
+            if (botId == null) {
+                log.warn("❌ [BOT-SERVICE] No bot linked to conferenceId={}, cannot switch mic", conferenceId);
+                return clientNotificationService.sendMicSwitchNotification(conferenceId, true);
+            }
+            
+            Boolean isMicMuted = sessionService.switchBotMic(botId);
+
+            return clientNotificationService.sendMicSwitchNotification(conferenceId, isMicMuted);
         }
 }

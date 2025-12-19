@@ -66,7 +66,6 @@ public class ClientWebSocketHandler implements WebSocketHandler {
         Mono<Void> messages = session.receive()
             .flatMap(msg -> switch (msg.getType()) {
                 case TEXT -> handleTextMessage(session, msg);
-                // case BINARY -> handleBinaryMessage(session, message);
                 default   -> Mono.empty();
             })
             .then() 
@@ -99,6 +98,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                         case "connect_bot" -> handleConnectBot(session, jsonNode);
                         case "disconnect_bot" -> handleDisconnectBot(session, jsonNode);
                         case "ask_question" -> handleAskQuestion(session, jsonNode);
+                        case "switch_mic" -> handleMicSwitch(session, jsonNode);
                         default -> {
                             log.warn("Unknown message type: {}", type);
                             yield Mono.empty();
@@ -144,23 +144,6 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                     return Mono.empty();
                 });
     }
-
-    // private Mono<Void> handleBinaryMessage(final WebSocketSession session, final WebSocketMessage message) {
-    //     return sessionService.getSessionData(session)
-    //             .flatMap(cs -> {
-    //                 final byte[] bytes = new byte[message.getPayload().readableByteCount()];
-    //                 message.getPayload().read(bytes);
-    //                 return audioDumpService.append(session.getId(), bytes)
-    //                         .then(sttRoutingService.forwardAudio(cs.getConferenceId(), cs.getEventId(), bytes))
-    //                         .doOnError(
-    //                                 e -> log.error("Failed to forward audio: conferenceId={}, eventId={}",
-    //                                         cs.getConferenceId(), cs.getEventId(), e));
-    //             })
-    //             .onErrorResume(e -> {
-    //                 log.warn("Binary from unregistered session or error: sessionId={}", session.getId());
-    //                 return Mono.empty();
-    //             });
-    // }
 
     private Mono<Void> handleCreateIdea(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
@@ -268,6 +251,19 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 })
                 .onErrorResume(e -> {
                     log.warn("Ask question from unregistered session or error: sessionId={}", session.getId());
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<Void> handleMicSwitch(final WebSocketSession session, final JsonNode jsonNode) {
+        return sessionService.getSessionData(session)
+                .flatMap(cs -> {
+                    log.info("Mic switch: conferenceId={}, eventId={}", cs.getConferenceId(), cs.getEventId());
+                    
+                    return botService.switchMic(cs.getConferenceId());
+                })
+                .onErrorResume(e -> {
+                    log.warn("Mic switch from unregistered session or error: sessionId={}", session.getId());
                     return Mono.empty();
                 });
     }

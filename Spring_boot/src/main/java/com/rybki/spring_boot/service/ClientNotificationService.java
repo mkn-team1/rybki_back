@@ -107,6 +107,12 @@ public class ClientNotificationService {
                 "answer", answer));
     }
 
+    public Mono<Void> sendMicSwitchNotification(final String conferenceId, final Boolean micMuted) {
+        return sendToClient(conferenceId, Map.of(
+                "type", "mic_switch",
+                "micMuted", micMuted));
+    }
+
     /**
      * Send a message to a specific client by conference ID
      */

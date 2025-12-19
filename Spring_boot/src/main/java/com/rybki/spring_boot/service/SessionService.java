@@ -27,6 +27,9 @@ public class SessionService {
     private final ConcurrentMap<String, String> clientToBot = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String> botToClient = new ConcurrentHashMap<>();
 
+    // bot WebSocketSession -> mic muted state
+    private final ConcurrentMap<WebSocketSession, Boolean> micMuted = new ConcurrentHashMap<>();
+
     // Регистрирует новую WS-сессию клиента
     public Mono<Void> registerClient(final WebSocketSession session, final String conferenceId,
             final String eventId) {
@@ -91,12 +94,14 @@ public class SessionService {
     public Mono<Void> registerBot(final String botId, final WebSocketSession session) {
         return Mono.fromRunnable(() -> {
             botSessions.put(botId, session);
+            micMuted.put(session, false);
             log.debug("Bot registered: botId={}, sessionId={}", botId, session.getId());
         });
     }
 
     public Mono<Void> unregisterBot(final String botId) {
         return Mono.fromRunnable(() -> {
+            micMuted.remove(botSessions.get(botId));
             botSessions.remove(botId);
             String conferenceId = botToClient.remove(botId);
             if (conferenceId != null) {
@@ -124,4 +129,28 @@ public class SessionService {
     public String getClientForBot(final String botId) {
         return botToClient.get(botId);
     }
+
+    public Boolean isBotMicMuted(final String botId) {
+        WebSocketSession botSession = botSessions.get(botId);
+        if (botSession == null) {
+            log.warn("No bot session found for botId={}", botId);
+            return false;
+        }
+        return micMuted.getOrDefault(botSession, false);
+    }
+
+    // returns if bot mic is muted after switch
+    public Boolean switchBotMic(final String botId) {
+        WebSocketSession botSession = botSessions.get(botId);
+        if (botSession == null) {
+            log.warn("No bot session found for botId={}, cannot switch mic", botId);
+            return true;
+        }
+        Boolean currentState = micMuted.getOrDefault(botSession, false);
+        Boolean newState = !currentState;
+        micMuted.put(botSession, newState);
+        log.info("Switched mic state for bot sessionId={} to {}", botSession.getId(), newState);
+        return newState;
+    }
+
 }
