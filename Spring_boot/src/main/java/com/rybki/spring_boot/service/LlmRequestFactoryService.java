@@ -83,6 +83,25 @@ public class LlmRequestFactoryService {
         log.debug("✅ [LLM_REQUEST_FACTORY] Context updated. Total ideas in memory: {}", foundIdeas.size());
     }
 
+
+    /**
+     * Создать LLM запрос для ответа на вопрос.
+     *
+     * @param question вопрос пользователя
+     * @return LLM запрос
+     */
+    public LlmRequest createAskRequest(final String question) {
+        final List<GigaChatRequestDto.Message> messages = new LinkedList<>();
+    
+        messages.add(GigaChatRequestDto.getUserMessage(question));
+
+        final LlmRequest request = new LlmRequestImpl(messages);
+
+        log.debug("✅ [LLM_REQUEST_FACTORY] Ask request created with {} messages total", messages.size());
+
+        return request;
+    }
+
     /**
      * Реализация LlmRequest для работы с сообщениями.
      */

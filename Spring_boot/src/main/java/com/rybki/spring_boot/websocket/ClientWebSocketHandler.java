@@ -10,6 +10,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rybki.spring_boot.service.AskService;
 import com.rybki.spring_boot.service.BotService;
 import com.rybki.spring_boot.service.IdeaService;
 import com.rybki.spring_boot.service.SessionService;
@@ -29,6 +30,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
 
     private final SessionService sessionService;
     private final VoteService voteService;
+    private final AskService askService;
 
     private final IdeaService ideaService;
     private final BotService botService;
@@ -96,6 +98,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                         case "react_to_idea" -> handleReactToIdea(session, jsonNode);
                         case "connect_bot" -> handleConnectBot(session, jsonNode);
                         case "disconnect_bot" -> handleDisconnectBot(session, jsonNode);
+                        case "ask_question" -> handleAskQuestion(session, jsonNode);
                         default -> {
                             log.warn("Unknown message type: {}", type);
                             yield Mono.empty();
@@ -246,6 +249,25 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 })
                 .onErrorResume(e -> {
                     log.warn("Disconnect bot from unregistered session or error: sessionId={}", session.getId());
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<Void> handleAskQuestion(final WebSocketSession session, final JsonNode jsonNode) {
+        return sessionService.getSessionData(session)
+                .flatMap(cs -> {
+                    final String question = jsonNode.path("question").asText();
+                    if (!StringUtils.hasText(question)) {
+                        log.warn("Empty question: conferenceId={}, eventId={}", cs.getConferenceId(), cs.getEventId());
+                        return Mono.<Void>empty();
+                    }
+                    log.info("Ask question: conferenceId={}, eventId={}, question={}", cs.getConferenceId(), cs.getEventId(),
+                            question);
+                    
+                    return askService.processQuestion(question, cs.getConferenceId());
+                })
+                .onErrorResume(e -> {
+                    log.warn("Ask question from unregistered session or error: sessionId={}", session.getId());
                     return Mono.empty();
                 });
     }
