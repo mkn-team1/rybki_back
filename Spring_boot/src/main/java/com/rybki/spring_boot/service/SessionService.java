@@ -71,6 +71,15 @@ public class SessionService {
         return Flux.fromIterable(list);
     }
 
+    // Получить все сессии для конкретной конференции
+    public Flux<ClientSession> getSessionsForConference(final String conferenceId) {
+        final List<ClientSession> list = clientSessions.values().stream()
+                .filter(cs -> cs.getConferenceId().equals(conferenceId))
+                .toList();
+        log.debug("Found {} sessions for conferenceId={}", list.size(), conferenceId);
+        return Flux.fromIterable(list);
+    }
+
     // Получить WS-сессию по eventId и conferenceId
     // public Mono<WebSocketSession> getSession(final String eventId, final String conferenceId) {
     //     return Mono.justOrEmpty(

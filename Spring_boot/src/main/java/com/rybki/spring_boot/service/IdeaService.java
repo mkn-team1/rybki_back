@@ -71,9 +71,9 @@ public class IdeaService {
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(redisIdea))
-                .then(clientNotificationService.broadcastIdea(conferenceId, eventId, redisIdea))
-                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created: ideaId={}, title={}", redisIdea.getIdeaId(),
-                        redisIdea.getTitle()));
+                .then(clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, redisIdea))
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created and broadcast to conference: ideaId={}, title={}, conferenceId={}", 
+                        redisIdea.getIdeaId(), redisIdea.getTitle(), conferenceId));
     }
 
     public Mono<Void> createIdeaFromFront(final String conferenceId, final String conferenceName,
@@ -97,8 +97,9 @@ public class IdeaService {
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
-                .then(clientNotificationService.sendIdeaToClient(conferenceId, idea))
-                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front: ideaId={}", idea.getIdeaId()));
+                .then(clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, idea))
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front and broadcast to conference: ideaId={}, conferenceId={}", 
+                        idea.getIdeaId(), conferenceId));
     }
 
     public Mono<Void> deleteIdea(String conferenceId, String eventId, String ideaId) {

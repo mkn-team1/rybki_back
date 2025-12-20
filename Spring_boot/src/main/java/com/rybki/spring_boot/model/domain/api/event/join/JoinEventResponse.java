@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 @Builder
 public class JoinEventResponse {
+    private String clientId;
     private String conferenceId;
     private String conferenceName;
     private String eventName;

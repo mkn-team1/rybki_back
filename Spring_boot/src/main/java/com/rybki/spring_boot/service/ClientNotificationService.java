@@ -32,10 +32,21 @@ public class ClientNotificationService {
     }
 
     /**
-     * Broadcast a new idea to all connected clients for an event
+     * Broadcast a new idea to all participants within the same conference
+     */
+    public Mono<Void> broadcastIdeaToConference(final String conferenceId, final String eventId, final Idea idea) {
+        return broadcastToConference(conferenceId, Map.of(
+                "type", "idea",
+                "conferenceId", conferenceId,
+                "eventId", eventId,
+                "idea", idea));
+    }
+
+    /**
+     * Broadcast a new idea to all connected clients for an event (excluding source conference)
      */
     public Mono<Void> broadcastIdea(final String conferenceId, final String eventId, final Idea idea) {
-        return broadcastToEvent(eventId, Map.of(
+        return broadcastToEvent(eventId, conferenceId, Map.of(
                 "type", "idea",
                 "conferenceId", conferenceId,
                 "eventId", eventId,
@@ -46,7 +57,7 @@ public class ClientNotificationService {
      * Broadcast idea deletion to all connected clients for an event
      */
     public Mono<Void> broadcastIdeaDeleted(final String conferenceId, final String eventId, final String ideaId) {
-        return broadcastToEvent(eventId, Map.of(
+        return broadcastToEvent(eventId, conferenceId, Map.of(
                 "type", "idea_deleted",
                 "conferenceId", conferenceId,
                 "eventId", eventId,
@@ -58,7 +69,7 @@ public class ClientNotificationService {
      */
     public Mono<Void> broadcastIdeaReaction(final String conferenceId, final String eventId, final String ideaId,
             final String reactionType, final int likes, final int dislikes) {
-        return broadcastToEvent(eventId, Map.of(
+        return broadcastToEvent(eventId, conferenceId, Map.of(
                 "type", "idea_reaction",
                 "conferenceId", conferenceId,
                 "eventId", eventId,
@@ -72,7 +83,7 @@ public class ClientNotificationService {
      * Broadcast list of ideas to all connected clients for an event
      */
     public Mono<Void> broadcastIdeasList(final String conferenceId, final String eventId, final List<Idea> ideas) {
-        return broadcastToEvent(eventId, Map.of(
+        return broadcastToEvent(eventId, conferenceId, Map.of(
                 "type", "ideas_list",
                 "conferenceId", conferenceId,
                 "eventId", eventId,
@@ -125,12 +136,50 @@ public class ClientNotificationService {
     }
 
     /**
-     * Broadcast a message to all clients connected to an event
+     * Broadcast a message to all participants within the same conference
      */
-    private Mono<Void> broadcastToEvent(final String eventId, final Map<String, Object> message) {
-        log.info("📡 [BROADCAST] Starting broadcast for eventId={}, messageType={}", eventId, message.get("type"));
+    private Mono<Void> broadcastToConference(final String conferenceId, final Map<String, Object> message) {
+        log.info("📡 [BROADCAST-CONFERENCE] Starting broadcast for conferenceId={}, messageType={}", 
+                conferenceId, message.get("type"));
+        return sessionService.getSessionsForConference(conferenceId)
+                .doOnNext(session -> log.debug("📡 [BROADCAST-CONFERENCE] Broadcasting to session: conferenceId={}, sessionId={}", 
+                        session.getConferenceId(), session.getSession().getId()))
+                .flatMap(clientSession -> {
+                    try {
+                        final String jsonMessage = objectMapper.writeValueAsString(message);
+                        final WebSocketSession session = clientSession.getSession();
+                        @SuppressWarnings("null")
+                        final Mono<Void> result = session.send(
+                                Mono.just(session.textMessage(jsonMessage)))
+                                .doOnError(e -> log.error(
+                                        "❌ [BROADCAST-CONFERENCE] Failed to broadcast to session: {}",
+                                        session.getId(), e));
+                        return result;
+                    } catch (final IOException e) {
+                        log.error("❌ [BROADCAST-CONFERENCE] Failed to serialize broadcast message", e);
+                        return Mono.empty();
+                    }
+                })
+                .collectList()
+                .then()
+                .doOnSuccess(v -> log.info("✅ [BROADCAST-CONFERENCE] Broadcast message type={} to conference={} completed",
+                        message.get("type"), conferenceId))
+                .onErrorResume(e -> {
+                    log.warn("⚠️ [BROADCAST-CONFERENCE] Error broadcasting to conference={}: {}", conferenceId, e.getMessage());
+                    return Mono.empty();
+                });
+    }
+
+    /**
+     * Broadcast a message to all clients connected to an event, excluding specific conference
+     */
+    private Mono<Void> broadcastToEvent(final String eventId, final String excludeConferenceId, final Map<String, Object> message) {
+        log.info("📡 [BROADCAST] Starting broadcast for eventId={}, messageType={}, excluding conferenceId={}", 
+                eventId, message.get("type"), excludeConferenceId);
         return sessionService.getSessionsForEvent(eventId)
-                .doOnNext(session -> log.debug("📡 [BROADCAST] Found session for eventId={}: {}", eventId, session.getSession().getId()))
+                .filter(cs -> !cs.getConferenceId().equals(excludeConferenceId))
+                .doOnNext(session -> log.debug("📡 [BROADCAST] Broadcasting to session: conferenceId={}, sessionId={}", 
+                        session.getConferenceId(), session.getSession().getId()))
                 .flatMap(clientSession -> {
                     try {
                         final String jsonMessage = objectMapper.writeValueAsString(message);

@@ -10,7 +10,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rybki.spring_boot.repository.RedisClientRepository;
 import com.rybki.spring_boot.service.BotService;
+import com.rybki.spring_boot.service.ClientRegistryService;
 import com.rybki.spring_boot.service.IdeaService;
 import com.rybki.spring_boot.service.SessionService;
 import com.rybki.spring_boot.service.VoteService;
@@ -32,6 +34,8 @@ public class ClientWebSocketHandler implements WebSocketHandler {
 
     private final IdeaService ideaService;
     private final BotService botService;
+    private final ClientRegistryService clientRegistryService;
+    private final RedisClientRepository redisClientRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -43,23 +47,31 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 .build()
                 .getQueryParams();
 
+        final String clientId = queryParams.getFirst(CLIENT_ID_PARAM);
         final String eventId = queryParams.getFirst(EVENT_ID_PARAM);
-        final String conferenceId = queryParams.getFirst(CLIENT_ID_PARAM);
 
-        if (!StringUtils.hasText(conferenceId) || !StringUtils.hasText(eventId)) {
+        if (!StringUtils.hasText(clientId) || !StringUtils.hasText(eventId)) {
+            log.warn("Missing required params: clientId={}, eventId={}",
+                    clientId, eventId);
             return session.close();
         }
 
-        // return sessionService.registerClient(session, conferenceId, eventId)
-        //         .thenMany(session.receive())
-        //         .flatMap(message -> switch (message.getType()) {
-        //             case TEXT -> handleTextMessage(session, message);
-        //             // case BINARY -> handleBinaryMessage(session, message);
-        //             default -> Mono.empty();
-        //         })
-        //         .then(handleClientDisconnect(session, conferenceId));
+        // Пытаемся получить conferenceId из Redis по clientId
+        // (он был сохранён при join event в EventService)
+        final var clientConfMapping = redisClientRepository.getClientConference(clientId);
+        
+        if (clientConfMapping.isEmpty()) {
+            log.warn("❌ No conference mapping found for clientId={}", clientId);
+            return session.close();
+        }
+        
+        final String conferenceId = clientConfMapping.get().conferenceId;
+        log.info("✅ Found conferenceId={} for clientId={}", conferenceId, clientId);
 
-        Mono<Void> register = sessionService.registerClient(session, conferenceId, eventId);
+        // Регистрируем clientID с его конференцией в реестре для последующего использования в SttResponseHandler
+        clientRegistryService.registerClient(clientId, conferenceId, eventId, "");
+
+        Mono<Void> register = sessionService.registerClient(session, clientId, conferenceId, eventId);
 
         Mono<Void> messages = session.receive()
             .flatMap(msg -> switch (msg.getType()) {
@@ -69,13 +81,15 @@ public class ClientWebSocketHandler implements WebSocketHandler {
             })
             .then() 
             .doFinally(signalType -> {
-                log.info("WS finished: conferenceId={}, sessionId={}, signal={}",
-                        conferenceId, session.getId(), signalType);
+                log.info("WS finished: clientId={}, conferenceId={}, sessionId={}, signal={}",
+                        clientId, conferenceId, session.getId(), signalType);
+                // Удаляем из реестра при отключении
+                clientRegistryService.unregisterClient(clientId);
                 botService.disconnectBot(conferenceId)
                     .then(sessionService.unregisterClient(session))
                     .doOnSuccess(v -> log.info(
-                        "Client disconnected: conferenceId={}, sessionId={}",
-                        conferenceId, session.getId()
+                        "Client disconnected: clientId={}, conferenceId={}, sessionId={}",
+                        clientId, conferenceId, session.getId()
                     ))
                     .subscribe();
             });
