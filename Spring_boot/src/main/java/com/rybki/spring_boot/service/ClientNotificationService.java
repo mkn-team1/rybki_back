@@ -136,6 +136,24 @@ public class ClientNotificationService {
     }
 
     /**
+     * Send answer on question to a specific client
+     */
+    public Mono<Void> sendQuestionAnswer(final String conferenceId, final String question, final String answer) {
+        return sendToClient(conferenceId, Map.of(
+                "type", "question_answer",
+                "question", question,
+                "answer", answer));
+    }
+
+    /**
+     * Send message about current micro state
+     */
+    public Mono<Void> sendMicSwitchNotification(final String conferenceId, final Boolean micMuted) {
+        return sendToClient(conferenceId, Map.of(
+                "type", "mic_switch",
+                "micMuted", micMuted));
+    
+    /**
      * Broadcast participants count change to all clients in the conference
      */
     public Mono<Void> broadcastParticipantsCount(final String conferenceId, final int count) {
@@ -147,7 +165,7 @@ public class ClientNotificationService {
     /**
      * Send a message to a specific client by conference ID
      */
-    public Mono<Void> sendToClient(final String conferenceId, final Map<String, Object> message) {
+    private Mono<Void> sendToClient(final String conferenceId, final Map<String, Object> message) {
         return sessionService.getClientSession(conferenceId)
                 .flatMap(session -> {
                     try {

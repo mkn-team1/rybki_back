@@ -59,6 +59,12 @@ public class BotWebSocketHandler implements WebSocketHandler {
 
     /** BINARY → пересылаем в STT */
     private Mono<Void> handleBinary(String botId, WebSocketMessage msg) {
+
+        if (botService.isMicMuted(botId)) {
+            log.debug("Bot {} sent audio but mic is muted — ignoring", botId);
+            return Mono.empty();
+        }
+
         return Mono.fromRunnable(() -> {
             try {
                 final byte[] bytes = new byte[msg.getPayload().readableByteCount()];

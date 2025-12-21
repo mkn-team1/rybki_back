@@ -10,6 +10,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rybki.spring_boot.service.AskService;
 import com.rybki.spring_boot.repository.RedisClientRepository;
 import com.rybki.spring_boot.repository.RedisEventRepository;
 import com.rybki.spring_boot.service.BotService;
@@ -34,6 +35,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private final SessionService sessionService;
     private final ClientNotificationService clientNotificationService;
     private final VoteService voteService;
+    private final AskService askService;
 
     private final IdeaService ideaService;
     private final BotService botService;
@@ -90,7 +92,6 @@ public class ClientWebSocketHandler implements WebSocketHandler {
         Mono<Void> messages = session.receive()
             .flatMap(msg -> switch (msg.getType()) {
                 case TEXT -> handleTextMessage(session, msg);
-                // case BINARY -> handleBinaryMessage(session, message);
                 default   -> Mono.empty();
             })
             .then() 
@@ -124,8 +125,10 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                         case "create_idea" -> handleCreateIdea(session, jsonNode);
                         case "delete_idea" -> handleDeleteIdea(session, jsonNode);
                         case "react_to_idea" -> handleReactToIdea(session, jsonNode);
-                        case "connect_bot" -> handleConnectBot(session, jsonNode);
+                        // case "connect_bot" -> handleConnectBot(session, jsonNode);
                         case "disconnect_bot" -> handleDisconnectBot(session, jsonNode);
+                        case "ask_question" -> handleAskQuestion(session, jsonNode);
+                        case "switch_mic" -> handleMicSwitch(session, jsonNode);
                         default -> {
                             log.warn("Unknown message type: {}", type);
                             yield Mono.empty();
@@ -171,23 +174,6 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                     return Mono.empty();
                 });
     }
-
-    // private Mono<Void> handleBinaryMessage(final WebSocketSession session, final WebSocketMessage message) {
-    //     return sessionService.getSessionData(session)
-    //             .flatMap(cs -> {
-    //                 final byte[] bytes = new byte[message.getPayload().readableByteCount()];
-    //                 message.getPayload().read(bytes);
-    //                 return audioDumpService.append(session.getId(), bytes)
-    //                         .then(sttRoutingService.forwardAudio(cs.getConferenceId(), cs.getEventId(), bytes))
-    //                         .doOnError(
-    //                                 e -> log.error("Failed to forward audio: conferenceId={}, eventId={}",
-    //                                         cs.getConferenceId(), cs.getEventId(), e));
-    //             })
-    //             .onErrorResume(e -> {
-    //                 log.warn("Binary from unregistered session or error: sessionId={}", session.getId());
-    //                 return Mono.empty();
-    //             });
-    // }
 
     private Mono<Void> handleCreateIdea(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
@@ -250,26 +236,26 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 });
     }
 
-    private Mono<Void> handleConnectBot(final WebSocketSession session, final JsonNode jsonNode) {
-        return sessionService.getSessionData(session)
-                .flatMap(cs -> {
-                    final String talkLink = jsonNode.path("talkLink").asText();
-                    final String platform = "kontur_talk"; // Пока только kontur_talk
+    // private Mono<Void> handleConnectBot(final WebSocketSession session, final JsonNode jsonNode) {
+    //     return sessionService.getSessionData(session)
+    //             .flatMap(cs -> {
+    //                 final String talkLink = jsonNode.path("talkLink").asText();
+    //                 final String platform = "kontur_talk"; // Пока только kontur_talk
 
-                    // TODO: во первых добавить проверку ссылки, во вторых придумать как возвращать ошибку, 
-                    // если ссылка неправильная (и изменить на meetingUrl)
+    //                 // TODO: во первых добавить проверку ссылки, во вторых придумать как возвращать ошибку, 
+    //                 // если ссылка неправильная (и изменить на meetingUrl)
 
-                    log.info("Connect bot request: conferenceId={}, eventId={}, talkLink={}, platform={}",
-                            cs.getConferenceId(), cs.getEventId(), talkLink, platform);
+    //                 log.info("Connect bot request: conferenceId={}, eventId={}, talkLink={}, platform={}",
+    //                         cs.getConferenceId(), cs.getEventId(), talkLink, platform);
 
-                    return botService.createBot(cs.getConferenceId(), talkLink, platform);
-                })
-                .onErrorResume(e -> {
-                    log.error("Failed to send connect bot command: sessionId={}, error={}",
-                            session.getId(), e.getMessage());
-                    return Mono.empty();
-                });
-    }
+    //                 return botService.createBot(cs.getConferenceId(), talkLink, platform);
+    //             })
+    //             .onErrorResume(e -> {
+    //                 log.error("Failed to send connect bot command: sessionId={}, error={}",
+    //                         session.getId(), e.getMessage());
+    //                 return Mono.empty();
+    //             });
+    // }
 
     private Mono<Void> handleDisconnectBot(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
@@ -278,6 +264,38 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 })
                 .onErrorResume(e -> {
                     log.warn("Disconnect bot from unregistered session or error: sessionId={}", session.getId());
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<Void> handleAskQuestion(final WebSocketSession session, final JsonNode jsonNode) {
+        return sessionService.getSessionData(session)
+                .flatMap(cs -> {
+                    final String question = jsonNode.path("question").asText();
+                    if (!StringUtils.hasText(question)) {
+                        log.warn("Empty question: conferenceId={}, eventId={}", cs.getConferenceId(), cs.getEventId());
+                        return Mono.<Void>empty();
+                    }
+                    log.info("Ask question: conferenceId={}, eventId={}, question={}", cs.getConferenceId(), cs.getEventId(),
+                            question);
+                    
+                    return askService.processQuestion(question, cs.getConferenceId());
+                })
+                .onErrorResume(e -> {
+                    log.warn("Ask question from unregistered session or error: sessionId={}", session.getId());
+                    return Mono.empty();
+                });
+    }
+
+    private Mono<Void> handleMicSwitch(final WebSocketSession session, final JsonNode jsonNode) {
+        return sessionService.getSessionData(session)
+                .flatMap(cs -> {
+                    log.info("Mic switch: conferenceId={}, eventId={}", cs.getConferenceId(), cs.getEventId());
+                    
+                    return botService.switchMic(cs.getConferenceId());
+                })
+                .onErrorResume(e -> {
+                    log.warn("Mic switch from unregistered session or error: sessionId={}", session.getId());
                     return Mono.empty();
                 });
     }
