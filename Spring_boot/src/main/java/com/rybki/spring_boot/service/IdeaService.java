@@ -165,8 +165,9 @@ public class IdeaService {
             log.info("🚀 [IDEA-SERVICE] Idea promoted to GLOBAL: ideaId={}, likes={}, participants={}", 
                     ideaId, likes, participantsCount);
             
-            // Отправляем уведомление о статусе всем в Event
+            // Отправляем идею всем конференциям в Event (кроме исходной)
             return broadcastReaction
+                    .then(clientNotificationService.broadcastIdea(conferenceId, eventId, idea))
                     .then(clientNotificationService.broadcastIdeaStatusChanged(eventId, conferenceId, ideaId, "global"));
         }
         

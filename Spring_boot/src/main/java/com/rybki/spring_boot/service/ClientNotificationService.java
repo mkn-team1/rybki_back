@@ -139,14 +139,21 @@ public class ClientNotificationService {
         return sessionService.getClientSession(conferenceId)
                 .flatMap(session -> {
                     try {
+                        final WebSocketSession wsSession = session.getSession();
+                        // Пропускаем уже закрытые сессии
+                        if (!wsSession.isOpen()) {
+                            log.debug("⚠️ [NOTIFICATION] Skipping closed session for conferenceId={}", conferenceId);
+                            return Mono.empty();
+                        }
                         final String jsonMessage = objectMapper.writeValueAsString(message);
                         @SuppressWarnings("null")
-                        Mono<Void> result = session.getSession()
-                                .send(Mono.just(session.getSession().textMessage(jsonMessage)))
+                        Mono<Void> result = wsSession
+                                .send(Mono.just(wsSession.textMessage(jsonMessage)))
                                 .doOnSuccess(v -> log.info("✅ [NOTIFICATION] Sent message type={} to client "
                                         + "conferenceId={}", message.get("type"), conferenceId))
                                 .doOnError(e -> log.error("❌ [NOTIFICATION] Failed to send message to client: {}",
                                         conferenceId, e))
+                                .onErrorResume(e -> Mono.empty())
                                 .then();
                         return result;
                     } catch (final Exception e) {
@@ -170,14 +177,20 @@ public class ClientNotificationService {
                         session.getConferenceId(), session.getSession().getId()))
                 .flatMap(clientSession -> {
                     try {
-                        final String jsonMessage = objectMapper.writeValueAsString(message);
                         final WebSocketSession session = clientSession.getSession();
+                        // Пропускаем уже закрытые сессии
+                        if (!session.isOpen()) {
+                            log.debug("⚠️ [BROADCAST-CONFERENCE] Skipping closed session: {}", session.getId());
+                            return Mono.empty();
+                        }
+                        final String jsonMessage = objectMapper.writeValueAsString(message);
                         @SuppressWarnings("null")
                         final Mono<Void> result = session.send(
                                 Mono.just(session.textMessage(jsonMessage)))
                                 .doOnError(e -> log.error(
                                         "❌ [BROADCAST-CONFERENCE] Failed to broadcast to session: {}",
-                                        session.getId(), e));
+                                        session.getId(), e))
+                                .onErrorResume(e -> Mono.empty());
                         return result;
                     } catch (final IOException e) {
                         log.error("❌ [BROADCAST-CONFERENCE] Failed to serialize broadcast message", e);
@@ -206,14 +219,20 @@ public class ClientNotificationService {
                         session.getConferenceId(), session.getSession().getId()))
                 .flatMap(clientSession -> {
                     try {
-                        final String jsonMessage = objectMapper.writeValueAsString(message);
                         final WebSocketSession session = clientSession.getSession();
+                        // Пропускаем уже закрытые сессии
+                        if (!session.isOpen()) {
+                            log.debug("⚠️ [BROADCAST] Skipping closed session: {}", session.getId());
+                            return Mono.empty();
+                        }
+                        final String jsonMessage = objectMapper.writeValueAsString(message);
                         @SuppressWarnings("null")
                         final Mono<Void> result = session.send(
                                 Mono.just(session.textMessage(jsonMessage)))
                                 .doOnError(e -> log.error(
                                         "❌ [BROADCAST] Failed to broadcast to session: {}",
-                                        session.getId(), e));
+                                        session.getId(), e))
+                                .onErrorResume(e -> Mono.empty());
                         return result;
                     } catch (final IOException e) {
                         log.error("❌ [BROADCAST] Failed to serialize broadcast message", e);
