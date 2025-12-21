@@ -37,7 +37,7 @@ public class SummaryService {
     public Mono<String> generateSummary(String eventId, String mode, String style) {
         log.info("📋 [SUMMARY] Generating summary for eventId={} with mode={} and style={}", eventId, mode, style);
 
-        // 1. Получаем идеи реактивно
+        // 1. Получаем идеи реактивно и сортируем по времени создания
         Mono<List<Idea>> ideasMono = Mono.fromCallable(() -> {
             Stream<Idea> ideaStream;
 
@@ -45,16 +45,19 @@ public class SummaryService {
                 case "accepted_only" -> ideaStream = ideaRepository.getAcceptedIdeas(eventId).stream()
                         .map(ideaRepository::findIdeaById)
                         .filter(Optional::isPresent)
-                        .map(Optional::get);
+                        .map(Optional::get)
+                        .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
                 case "all" -> {
                     Stream<Idea> pending = ideaRepository.getPendingIdeas(eventId).stream()
                             .map(ideaRepository::findIdeaById)
                             .filter(Optional::isPresent)
-                            .map(Optional::get);
+                            .map(Optional::get)
+                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
                     Stream<Idea> accepted = ideaRepository.getAcceptedIdeas(eventId).stream()
                             .map(ideaRepository::findIdeaById)
                             .filter(Optional::isPresent)
-                            .map(Optional::get);
+                            .map(Optional::get)
+                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
                     ideaStream = Stream.concat(pending, accepted);
                 }
                 default -> throw new IllegalArgumentException("Unsupported mode: " + mode);
@@ -79,17 +82,16 @@ public class SummaryService {
                     style != null ? style : "detailed", inputText
             );
 
-            /**
-             * на будущее: если идей много, возможно стоит отправлять понемногу ему по особенному
-             */
-
             // 3. Формируем LLM request через фабрику
             LlmRequest request = llmRequestFactoryService.createCustomRequest(prompt);
 
             // 4. Отправляем на LLM и возвращаем результат
             return llmClient.sendRequest(request)
                     .map(LlmResponse::getContent)
-                    .doOnSuccess(s -> log.info("✅ [SUMMARY] Generated summary: {}", s != null && s.length() > 200 ? s.substring(0, 200) + "..." : s))
+                    .doOnSuccess(s -> {
+                        String logContent = s != null && s.length() > 200 ? s.substring(0, 200) + "..." : s;
+                        log.info("✅ [SUMMARY] Generated summary: {}", logContent);
+                    })
                     .doOnError(e -> log.error("❌ [SUMMARY] Failed to generate summary for eventId={}", eventId, e));
         });
     }
