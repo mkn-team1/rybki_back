@@ -83,7 +83,9 @@ public class ClientWebSocketHandler implements WebSocketHandler {
         Mono<Void> register = sessionService.registerClient(session, clientId, conferenceId, conferenceName, eventId)
             .then(Mono.fromRunnable(() -> log.info("📢 [SESSION] Participants count changed for conferenceId={}", conferenceId)))
             .then(clientNotificationService.broadcastParticipantsCount(conferenceId,
-                sessionService.getParticipantsCountForConference(conferenceId)));
+                sessionService.getParticipantsCountForConference(conferenceId)))
+            // Отправляем новому участнику все существующие LOCAL идеи конференции
+            .then(ideaService.sendExistingIdeasToClient(conferenceId, eventId));
 
         Mono<Void> messages = session.receive()
             .flatMap(msg -> switch (msg.getType()) {

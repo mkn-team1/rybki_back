@@ -2,6 +2,7 @@ package com.rybki.spring_boot.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -136,42 +137,64 @@ public class IdeaService {
 
     private Mono<Void> handleLikeDislikeReaction(String conferenceId, String eventId, String ideaId,
             String reaction, String clientId, com.rybki.spring_boot.model.domain.redis.Idea idea) {
+        // Определяем, голосует ли клиент за свою LOCAL идею или за чужую GLOBAL/GOLDEN
+        final boolean isOwnIdea = idea.getConferenceId().equals(conferenceId);
+        final boolean isGlobalOrGoldenIdea = idea.getStatus() == IdeaStatus.GLOBAL || idea.getStatus() == IdeaStatus.GOLDEN;
+        
+        if (!isOwnIdea && !isGlobalOrGoldenIdea) {
+            log.warn("⚠️ [IDEA-SERVICE] Cannot vote for LOCAL idea from another conference: ideaId={}, clientConferenceId={}, ideaConferenceId={}",
+                    ideaId, conferenceId, idea.getConferenceId());
+            return Mono.empty();
+        }
+        
         if ("like".equals(reaction)) {
             handleLikeVote(idea, clientId);
         } else if ("dislike".equals(reaction)) {
             handleDislikeVote(idea, clientId);
         }
-        ideaRepository.saveIdea(idea);
         
         // Получаем актуальные значения из sets
         final int likes = idea.getLikesClientsSet().size();
         final int dislikes = idea.getDislikesClientsSet().size();
         
-        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, clientId={}, likes={}, dislikes={}",
-                ideaId, reaction, clientId, likes, dislikes);
+        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, clientId={}, likes={}, dislikes={}, ideaStatus={}",
+                ideaId, reaction, clientId, likes, dislikes, idea.getStatus());
         
-        // Отправляем обновление реакции всем в конференции
-        final Mono<Void> broadcastReaction = clientNotificationService.broadcastIdeaReaction(conferenceId, ideaId,
-                likes, dislikes);
+        // Сохраняем идею в Redis после обновления голоса
+        Mono<Void> saveMono = Mono.fromRunnable(() -> ideaRepository.saveIdea(idea));
         
-        // Проверяем условие promotion: likes > 50% от количества людей в конференции
-        final int participantsCount = sessionService.getParticipantsCountForConference(conferenceId);
-        final boolean shouldPromoteToGlobal = likes > participantsCount / 2.0 && idea.getPromotedToGlobalAt() == null;
-        
-        if (shouldPromoteToGlobal) {
-            idea.setPromotedToGlobalAt(Instant.now().toString());
-            idea.setStatus(IdeaStatus.GLOBAL);
-            ideaRepository.saveIdea(idea);
-            log.info("🚀 [IDEA-SERVICE] Idea promoted to GLOBAL: ideaId={}, likes={}, participants={}", 
-                    ideaId, likes, participantsCount);
-            
-            // Отправляем идею всем конференциям в Event (кроме исходной)
-            return broadcastReaction
-                    .then(clientNotificationService.broadcastIdea(conferenceId, eventId, idea))
-                    .then(clientNotificationService.broadcastIdeaStatusChanged(eventId, conferenceId, ideaId, "global"));
+        // Для GLOBAL и GOLDEN идей рассылаем реакцию всему Event, для LOCAL - только конференции
+        final Mono<Void> broadcastReaction;
+        if (isGlobalOrGoldenIdea) {
+            // Рассылаем всему Event
+            broadcastReaction = clientNotificationService.broadcastIdeaReactionToEvent(eventId, ideaId, likes, dislikes);
+        } else {
+            // Рассылаем только своей конференции
+            broadcastReaction = clientNotificationService.broadcastIdeaReaction(conferenceId, ideaId, likes, dislikes);
         }
         
-        return broadcastReaction;
+        // Проверяем условие promotion: likes > 50% от количества людей в конференции (только для LOCAL идей)
+        if (!isGlobalOrGoldenIdea) {
+            final int participantsCount = sessionService.getParticipantsCountForConference(idea.getConferenceId());
+            final boolean shouldPromoteToGlobal = likes > participantsCount / 2.0 
+                    && idea.getPromotedToGlobalAt() == null;
+            
+            if (shouldPromoteToGlobal) {
+                idea.setPromotedToGlobalAt(Instant.now().toString());
+                idea.setStatus(IdeaStatus.GLOBAL);
+                log.info("🚀 [IDEA-SERVICE] Idea promoted to GLOBAL: ideaId={}, likes={}, participants={}", 
+                        ideaId, likes, participantsCount);
+                
+                // Сохраняем идею после промоции и отправляем всем конференциям в Event (кроме исходной)
+                return saveMono
+                        .then(broadcastReaction)
+                        .then(Mono.fromRunnable(() -> ideaRepository.saveIdea(idea)))
+                        .then(clientNotificationService.broadcastIdea(idea.getConferenceId(), eventId, idea))
+                        .then(clientNotificationService.broadcastIdeaStatusChanged(eventId, idea.getConferenceId(), ideaId, "global"));
+            }
+        }
+        
+        return saveMono.then(broadcastReaction);
     }
 
     private void handleLikeVote(com.rybki.spring_boot.model.domain.redis.Idea idea, String clientId) {
@@ -199,5 +222,36 @@ public class IdeaService {
                     .map(java.util.Optional::get)
                     .toList();
         });
+    }
+
+    /**
+     * Отправить все существующие идеи новому подключившемуся клиенту:
+     * - LOCAL идеи своей конференции
+     * - Все GLOBAL и GOLDEN идеи из Event
+     */
+    public Mono<Void> sendExistingIdeasToClient(String conferenceId, String eventId) {
+        return Mono.fromCallable(() -> {
+            final Set<String> localIdeaIds = ideaRepository.getLocalIdeasForConference(eventId, conferenceId);
+            final Set<String> globalAndGoldenIds = ideaRepository.getGlobalAndGoldenIdeas(eventId);
+            
+            // Объединяем LOCAL идеи конференции с GLOBAL/GOLDEN идеями Event
+            final Set<String> allIdeaIds = new java.util.HashSet<>(localIdeaIds);
+            allIdeaIds.addAll(globalAndGoldenIds);
+            
+            if (allIdeaIds.isEmpty()) {
+                log.debug("📭 [IDEA-SERVICE] No existing ideas for conferenceId={}", conferenceId);
+                return List.<com.rybki.spring_boot.model.domain.redis.Idea>of();
+            }
+            log.info("📬 [IDEA-SERVICE] Sending {} existing ideas to conferenceId={} (LOCAL={}, GLOBAL/GOLDEN={})", 
+                    allIdeaIds.size(), conferenceId, localIdeaIds.size(), globalAndGoldenIds.size());
+            return allIdeaIds.stream()
+                    .map(ideaRepository::findIdeaById)
+                    .filter(java.util.Optional::isPresent)
+                    .map(java.util.Optional::get)
+                    .toList();
+        })
+        .flatMapMany(reactor.core.publisher.Flux::fromIterable)
+        .flatMap(idea -> clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, idea))
+        .then();
     }
 }

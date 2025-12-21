@@ -81,6 +81,18 @@ public class ClientNotificationService {
     }
 
     /**
+     * Broadcast idea reaction update to all connected clients in the event (for GLOBAL ideas)
+     */
+    public Mono<Void> broadcastIdeaReactionToEvent(final String eventId, final String ideaId,
+            final int likes, final int dislikes) {
+        return broadcastToEvent(eventId, "", Map.of(
+                "type", "idea_reaction",
+                "ideaId", ideaId,
+                "likes", likes,
+                "dislikes", dislikes));
+    }
+
+    /**
      * Broadcast idea status change to all connected clients in the event
      */
     public Mono<Void> broadcastIdeaStatusChanged(final String eventId, final String conferenceId, 

@@ -34,6 +34,14 @@ public class RedisKeys {
         return "idea:" + ideaId + ":votes";
     }
 
+    public static String ideaLikesKey(final String ideaId) {
+        return "idea:" + ideaId + ":likes";
+    }
+
+    public static String ideaDislikesKey(final String ideaId) {
+        return "idea:" + ideaId + ":dislikes";
+    }
+
     public static String clientSessionKey(final String clientId) {
         return "client:" + clientId + ":session";
     }
