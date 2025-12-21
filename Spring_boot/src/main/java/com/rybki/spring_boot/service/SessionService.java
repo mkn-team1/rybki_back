@@ -12,10 +12,14 @@ import com.rybki.spring_boot.model.domain.ClientSession;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import lombok.RequiredArgsConstructor;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class SessionService {
+
+    private final ClientNotificationService clientNotificationService;
 
     // sessionId -> ClientSession
     private final ConcurrentMap<String, ClientSession> clientSessions = new ConcurrentHashMap<>();
@@ -27,28 +31,37 @@ public class SessionService {
     private final ConcurrentMap<String, String> clientToBot = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, String> botToClient = new ConcurrentHashMap<>();
 
-    // Регистрирует новую WS-сессию клиента
     public Mono<Void> registerClient(final WebSocketSession session, final String conferenceId,
             final String eventId) {
-        return registerClient(session, conferenceId, "", eventId)
+        return registerClient(session, null, conferenceId, "", eventId)
                 .doOnSuccess(v -> log.info("Registered client: conferenceId={}, eventId={}", conferenceId, eventId));
     }
 
     public Mono<Void> registerClient(final WebSocketSession session, final String conferenceId,
             final String conferenceName, final String eventId) {
-        return Mono.fromRunnable(() -> {
-            clientSessions.put(session.getId(), ClientSession.builder().conferenceId(conferenceId)
-                    .conferenceName(conferenceName).eventId(eventId).session(session).build());
-            log.info("Registered session: sessionId={}, conferenceId={}, eventId={}",
-                    session.getId(), conferenceId, eventId);
+        return registerClient(session, null, conferenceId, conferenceName, eventId);
+    }
 
-        });
+    public Mono<Void> registerClient(final WebSocketSession session, final String clientId, final String conferenceId,
+            final String conferenceName, final String eventId) {
+        return Mono.fromRunnable(() -> {
+            clientSessions.put(session.getId(), ClientSession.builder().clientId(clientId).conferenceId(conferenceId)
+                    .conferenceName(conferenceName).eventId(eventId).session(session).build());
+            log.info("Registered session: sessionId={}, clientId={}, conferenceId={}, eventId={}",
+                    session.getId(), clientId, conferenceId, eventId);
+        }).then(notifyParticipantsCountChange(conferenceId));
     }
 
     public Mono<Void> unregisterClient(final WebSocketSession session) {
-        return Mono.fromRunnable(() -> {
-            clientSessions.remove(session.getId());
+        return Mono.fromCallable(() -> {
+            final ClientSession cs = clientSessions.remove(session.getId());
             log.debug("Client unregistered: sessionId={}", session.getId());
+            return cs;
+        }).flatMap(cs -> {
+            if (cs != null) {
+                return notifyParticipantsCountChange(cs.getConferenceId());
+            }
+            return Mono.empty();
         });
     }
 
@@ -78,6 +91,20 @@ public class SessionService {
                 .toList();
         log.debug("Found {} sessions for conferenceId={}", list.size(), conferenceId);
         return Flux.fromIterable(list);
+    }
+
+    // Получить количество участников в конференции
+    public int getParticipantsCountForConference(final String conferenceId) {
+        return (int) clientSessions.values().stream()
+                .filter(cs -> cs.getConferenceId().equals(conferenceId))
+                .count();
+    }
+
+    // Отправить уведомление об изменении количества участников
+    private Mono<Void> notifyParticipantsCountChange(final String conferenceId) {
+        final int count = getParticipantsCountForConference(conferenceId);
+        log.info("📢 [SESSION] Participants count changed for conferenceId={}: count={}", conferenceId, count);
+        return clientNotificationService.broadcastParticipantsCount(conferenceId, count);
     }
 
     // Получить WS-сессию по eventId и conferenceId

@@ -24,6 +24,7 @@ public class IdeaService {
     private final IdeaExtractorClient ideaExtractorClient;
     private final ClientNotificationService clientNotificationService;
     private final RedisIdeaRepository ideaRepository;
+    private final SessionService sessionService;
 
     public Mono<Void> processText(String conferenceId, String conferenceName, String eventId, String text) {
         log.info("💡 [IDEA-SERVICE] Starting idea extraction: conferenceId={}, eventId={}, textLength={} chars",
@@ -107,7 +108,7 @@ public class IdeaService {
         return clientNotificationService.broadcastIdeaDeleted(conferenceId, eventId, ideaId);
     }
 
-    public Mono<Void> reactToIdea(String conferenceId, String eventId, String ideaId, String reaction) {
+    public Mono<Void> reactToIdea(String conferenceId, String eventId, String ideaId, String reaction, String clientId) {
         return Mono.fromCallable(() -> ideaRepository.findIdeaById(ideaId))
                 .flatMap(ideaOpt -> {
                     if (ideaOpt.isEmpty()) {
@@ -117,7 +118,7 @@ public class IdeaService {
                     if ("accept".equals(reaction)) {
                         return handleAcceptReaction(conferenceId, eventId, ideaId, r);
                     } else {
-                        return handleLikeDislikeReaction(conferenceId, eventId, ideaId, reaction, r);
+                        return handleLikeDislikeReaction(conferenceId, eventId, ideaId, reaction, clientId, r);
                     }
                 });
     }
@@ -131,17 +132,57 @@ public class IdeaService {
     }
 
     private Mono<Void> handleLikeDislikeReaction(String conferenceId, String eventId, String ideaId,
-            String reaction, com.rybki.spring_boot.model.domain.redis.Idea idea) {
+            String reaction, String clientId, com.rybki.spring_boot.model.domain.redis.Idea idea) {
         if ("like".equals(reaction)) {
-            idea.setLikes(idea.getLikes() != null ? idea.getLikes() + 1 : 1);
+            handleLikeVote(idea, clientId);
         } else if ("dislike".equals(reaction)) {
-            idea.setDislikes(idea.getDislikes() != null ? idea.getDislikes() + 1 : 1);
+            handleDislikeVote(idea, clientId);
         }
         ideaRepository.saveIdea(idea);
-        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, likes={}, dislikes={}",
-                ideaId, reaction, idea.getLikes(), idea.getDislikes());
-        return clientNotificationService.broadcastIdeaReaction(conferenceId, eventId, ideaId,
-                reaction, idea.getLikes(), idea.getDislikes());
+        
+        // Получаем актуальные значения из sets
+        final int likes = idea.getLikesClientsSet().size();
+        final int dislikes = idea.getDislikesClientsSet().size();
+        
+        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, clientId={}, likes={}, dislikes={}",
+                ideaId, reaction, clientId, likes, dislikes);
+        
+        // Отправляем обновление реакции всем в конференции
+        final Mono<Void> broadcastReaction = clientNotificationService.broadcastIdeaReaction(conferenceId, ideaId,
+                likes, dislikes);
+        
+        // Проверяем условие promotion: likes > 50% от количества людей в конференции
+        final int participantsCount = sessionService.getParticipantsCountForConference(conferenceId);
+        final boolean shouldPromoteToGlobal = likes > participantsCount / 2.0 && idea.getPromotedToGlobalAt() == null;
+        
+        if (shouldPromoteToGlobal) {
+            idea.setPromotedToGlobalAt(Instant.now().toString());
+            ideaRepository.saveIdea(idea);
+            log.info("🚀 [IDEA-SERVICE] Idea promoted to GLOBAL: ideaId={}, likes={}, participants={}", 
+                    ideaId, likes, participantsCount);
+            
+            // Отправляем уведомление о статусе всем в Event
+            return broadcastReaction
+                    .then(clientNotificationService.broadcastIdeaStatusChanged(eventId, conferenceId, ideaId, "global"));
+        }
+        
+        return broadcastReaction;
+    }
+
+    private void handleLikeVote(com.rybki.spring_boot.model.domain.redis.Idea idea, String clientId) {
+        if (!idea.getLikesClientsSet().contains(clientId)) {
+            idea.getLikesClientsSet().add(clientId);
+            // Если был dislike, удаляем его
+            idea.getDislikesClientsSet().remove(clientId);
+        }
+    }
+
+    private void handleDislikeVote(com.rybki.spring_boot.model.domain.redis.Idea idea, String clientId) {
+        if (!idea.getDislikesClientsSet().contains(clientId)) {
+            idea.getDislikesClientsSet().add(clientId);
+            // Если был like, удаляем его
+            idea.getLikesClientsSet().remove(clientId);
+        }
     }
 
     public Mono<List<com.rybki.spring_boot.model.domain.redis.Idea>> getIdeasForEvent(String eventId) {

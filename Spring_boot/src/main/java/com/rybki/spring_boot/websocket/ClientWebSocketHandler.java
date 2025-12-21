@@ -222,9 +222,9 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                         log.warn("Empty ideaId: conferenceId={}, eventId={}", cs.getConferenceId(), cs.getEventId());
                         return Mono.<Void>empty();
                     }
-                    log.info("React to idea: conferenceId={}, eventId={}, ideaId={}, reaction={}", cs.getConferenceId(),
-                            cs.getEventId(), ideaId, reactionType);
-                    return ideaService.reactToIdea(cs.getConferenceId(), cs.getEventId(), ideaId, reactionType);
+                    log.info("React to idea: conferenceId={}, eventId={}, ideaId={}, reaction={}, clientId={}", cs.getConferenceId(),
+                            cs.getEventId(), ideaId, reactionType, cs.getClientId());
+                    return ideaService.reactToIdea(cs.getConferenceId(), cs.getEventId(), ideaId, reactionType, cs.getClientId());
                 })
                 .onErrorResume(e -> {
                     log.warn("React to idea from unregistered session or error: sessionId={}", session.getId());

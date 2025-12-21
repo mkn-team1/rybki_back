@@ -32,17 +32,11 @@ public class RedisConfig {
         final RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
 
-        // Создаем ObjectMapper с поддержкой типов
-        final ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule());
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        objectMapper.activateDefaultTyping(
-            objectMapper.getPolymorphicTypeValidator(),
-            ObjectMapper.DefaultTyping.NON_FINAL
-        );
+        // Создаем ObjectMapper для Redis - СОХРАНЯЕТ @JsonIgnore поля
+        final ObjectMapper redisObjectMapper = createRedisObjectMapper();
 
         final GenericJackson2JsonRedisSerializer serializer =
-            new GenericJackson2JsonRedisSerializer(objectMapper);
+            new GenericJackson2JsonRedisSerializer(redisObjectMapper);
 
         template.setKeySerializer(new StringRedisSerializer());
         template.setValueSerializer(serializer);
@@ -51,5 +45,38 @@ public class RedisConfig {
 
         template.afterPropertiesSet();
         return template;
+    }
+
+    /**
+     * ObjectMapper для Redis - сохраняет все поля, включая отмеченные @JsonIgnore
+     * Использует addMixIn для переопределения поведения @JsonIgnore
+     */
+    private ObjectMapper createRedisObjectMapper() {
+        final ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        
+        // Переопределяем @JsonIgnore для класса Idea через mixin
+        mapper.addMixIn(com.rybki.spring_boot.model.domain.redis.Idea.class, IdeaRedisSerializationMixin.class);
+        
+        mapper.activateDefaultTyping(
+            mapper.getPolymorphicTypeValidator(),
+            ObjectMapper.DefaultTyping.NON_FINAL
+        );
+        
+        return mapper;
+    }
+
+    /**
+     * Mixin для переопределения @JsonIgnore на sets при сохранении в Redis
+     * Позволяет сохранять likesClientsSet и dislikesClientsSet в Redis
+     */
+    public abstract static class IdeaRedisSerializationMixin {
+        // Удаляем @JsonIgnore из sets - они будут сохраняться в Redis
+        @com.fasterxml.jackson.annotation.JsonProperty
+        public java.util.Set<String> likesClientsSet;
+
+        @com.fasterxml.jackson.annotation.JsonProperty
+        public java.util.Set<String> dislikesClientsSet;
     }
 }

@@ -39,7 +39,7 @@ public class ClientNotificationService {
                 "type", "idea",
                 "conferenceId", conferenceId,
                 "eventId", eventId,
-                "idea", idea));
+                "idea", idea.prepareForSerialization()));
     }
 
     /**
@@ -50,7 +50,7 @@ public class ClientNotificationService {
                 "type", "idea",
                 "conferenceId", conferenceId,
                 "eventId", eventId,
-                "idea", idea));
+                "idea", idea.prepareForSerialization()));
     }
 
     /**
@@ -65,29 +65,40 @@ public class ClientNotificationService {
     }
 
     /**
-     * Broadcast idea reaction update to all connected clients for an event
+     * Broadcast idea reaction update to all connected clients in the conference
      */
-    public Mono<Void> broadcastIdeaReaction(final String conferenceId, final String eventId, final String ideaId,
-            final String reactionType, final int likes, final int dislikes) {
-        return broadcastToEvent(eventId, conferenceId, Map.of(
+    public Mono<Void> broadcastIdeaReaction(final String conferenceId, final String ideaId,
+            final int likes, final int dislikes) {
+        return broadcastToConference(conferenceId, Map.of(
                 "type", "idea_reaction",
-                "conferenceId", conferenceId,
-                "eventId", eventId,
                 "ideaId", ideaId,
-                "reaction", reactionType,
                 "likes", likes,
                 "dislikes", dislikes));
+    }
+
+    /**
+     * Broadcast idea status change to all connected clients in the event
+     */
+    public Mono<Void> broadcastIdeaStatusChanged(final String eventId, final String conferenceId, 
+            final String ideaId, final String status) {
+        return broadcastToEvent(eventId, conferenceId, Map.of(
+                "type", "idea_status_changed",
+                "ideaId", ideaId,
+                "status", status));
     }
 
     /**
      * Broadcast list of ideas to all connected clients for an event
      */
     public Mono<Void> broadcastIdeasList(final String conferenceId, final String eventId, final List<Idea> ideas) {
+        final List<Idea> preparedIdeas = ideas.stream()
+                .map(Idea::prepareForSerialization)
+                .toList();
         return broadcastToEvent(eventId, conferenceId, Map.of(
                 "type", "ideas_list",
                 "conferenceId", conferenceId,
                 "eventId", eventId,
-                "ideas", ideas));
+                "ideas", preparedIdeas));
     }
 
     /**
@@ -106,6 +117,15 @@ public class ClientNotificationService {
         return sendToClient(conferenceId, Map.of(
                 "type", "bot_disconnected",
                 "botId", botId));
+    }
+
+    /**
+     * Broadcast participants count change to all clients in the conference
+     */
+    public Mono<Void> broadcastParticipantsCount(final String conferenceId, final int count) {
+        return broadcastToConference(conferenceId, Map.of(
+                "type", "participants_count",
+                "count", count));
     }
 
     /**
