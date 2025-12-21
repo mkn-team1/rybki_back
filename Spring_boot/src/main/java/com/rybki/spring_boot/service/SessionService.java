@@ -9,17 +9,15 @@ import org.springframework.web.reactive.socket.WebSocketSession;
 
 import com.rybki.spring_boot.model.domain.ClientSession;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import lombok.RequiredArgsConstructor;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class SessionService {
-
-    private final ClientNotificationService clientNotificationService;
 
     // sessionId -> ClientSession
     private final ConcurrentMap<String, ClientSession> clientSessions = new ConcurrentHashMap<>();
@@ -47,9 +45,9 @@ public class SessionService {
         return Mono.fromRunnable(() -> {
             clientSessions.put(session.getId(), ClientSession.builder().clientId(clientId).conferenceId(conferenceId)
                     .conferenceName(conferenceName).eventId(eventId).session(session).build());
-            log.info("Registered session: sessionId={}, clientId={}, conferenceId={}, eventId={}",
-                    session.getId(), clientId, conferenceId, eventId);
-        }).then(notifyParticipantsCountChange(conferenceId));
+            log.info("Registered session: sessionId={}, clientId={}, conferenceId={}, conferenceName={}, eventId={}",
+                    session.getId(), clientId, conferenceId, conferenceName, eventId);
+        });
     }
 
     public Mono<Void> unregisterClient(final WebSocketSession session) {
@@ -57,12 +55,7 @@ public class SessionService {
             final ClientSession cs = clientSessions.remove(session.getId());
             log.debug("Client unregistered: sessionId={}", session.getId());
             return cs;
-        }).flatMap(cs -> {
-            if (cs != null) {
-                return notifyParticipantsCountChange(cs.getConferenceId());
-            }
-            return Mono.empty();
-        });
+        }).then();
     }
 
     public Mono<ClientSession> getSessionData(final WebSocketSession session) {
@@ -98,13 +91,6 @@ public class SessionService {
         return (int) clientSessions.values().stream()
                 .filter(cs -> cs.getConferenceId().equals(conferenceId))
                 .count();
-    }
-
-    // Отправить уведомление об изменении количества участников
-    private Mono<Void> notifyParticipantsCountChange(final String conferenceId) {
-        final int count = getParticipantsCountForConference(conferenceId);
-        log.info("📢 [SESSION] Participants count changed for conferenceId={}: count={}", conferenceId, count);
-        return clientNotificationService.broadcastParticipantsCount(conferenceId, count);
     }
 
     // Получить WS-сессию по eventId и conferenceId

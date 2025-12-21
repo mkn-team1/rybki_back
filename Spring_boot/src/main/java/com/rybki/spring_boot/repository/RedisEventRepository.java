@@ -257,7 +257,7 @@ public class RedisEventRepository {
             final String nameToIdKey = RedisKeys.eventConferenceNameKey(eventId, conferenceName);
             redisTemplate.opsForValue().set(nameToIdKey, conferenceId);
 
-            log.debug("✅ Saved conference name: conferenceId={}, conferenceName={}, eventId={}",
+            log.info("✅ Saved conference name: conferenceId={}, conferenceName={}, eventId={}",
                     conferenceId, conferenceName, eventId);
         } catch (final Exception e) {
             log.error("❌ Error saving conference name: conferenceId={}, conferenceName={}", 
@@ -286,6 +286,31 @@ public class RedisEventRepository {
         } catch (final Exception e) {
             log.error("❌ Error finding conference by name: eventId={}, conferenceName={}", 
                     eventId, conferenceName, e);
+            return Optional.empty();
+        }
+    }
+
+    // ПОЛУЧЕНИЕ ИМЕНИ КОНФЕРЕНЦИИ ПО ID
+    public Optional<String> getConferenceName(final String conferenceId) {
+        try {
+            if (!isRedisConnected()) {
+                throw new RuntimeException("Redis is not connected");
+            }
+            final String key = RedisKeys.conferenceNameKey(conferenceId);
+            final Object result = redisTemplate.opsForValue().get(key);
+            
+            if (result != null) {
+                final String conferenceName = result.toString();
+                log.info("✅ Found conference name: conferenceId={}, conferenceName={}",
+                        conferenceId, conferenceName);
+                return Optional.of(conferenceName);
+            }
+            
+            log.warn("⚠️ No conference name found for: conferenceId={}", conferenceId);
+            return Optional.empty();
+        } catch (final Exception e) {
+            log.error("❌ Error getting conference name: conferenceId={}", 
+                    conferenceId, e);
             return Optional.empty();
         }
     }

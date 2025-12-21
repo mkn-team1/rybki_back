@@ -35,6 +35,7 @@ public class EventService {
         final String conferenceId = UUID.randomUUID().toString();
         final String eventId = UUID.randomUUID().toString();
         final String clientId = UUID.randomUUID().toString();
+        final String conferenceName = eventRequest.getEventName();
 
         log.info("Creating new event: eventId={}, conferenceId={}, clientId={}", eventId, conferenceId, clientId);
 
@@ -49,6 +50,7 @@ public class EventService {
         eventRepository.createEvent(event);
 
         eventRepository.addParticipant(eventId, conferenceId);
+        eventRepository.saveConferenceName(conferenceId, conferenceName, eventId);
         redisClientRepository.saveClientConference(clientId, conferenceId, eventId);
 
         log.info("Event created successfully: eventId={}, clientId={}", eventId, clientId);

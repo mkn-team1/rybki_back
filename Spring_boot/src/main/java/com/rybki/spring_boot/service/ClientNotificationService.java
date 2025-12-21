@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.socket.WebSocketSession;
 
@@ -19,7 +20,8 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class ClientNotificationService {
 
-    private final SessionService sessionService;
+        @Lazy
+        private final SessionService sessionService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -35,6 +37,8 @@ public class ClientNotificationService {
      * Broadcast a new idea to all participants within the same conference
      */
     public Mono<Void> broadcastIdeaToConference(final String conferenceId, final String eventId, final Idea idea) {
+        log.info("📢 [BROADCAST] broadcastIdeaToConference: conferenceId={}, idea.conferenceId={}, idea.conferenceName='{}'",
+                conferenceId, idea.getConferenceId(), idea.getConferenceName());
         return broadcastToConference(conferenceId, Map.of(
                 "type", "idea",
                 "conferenceId", conferenceId,

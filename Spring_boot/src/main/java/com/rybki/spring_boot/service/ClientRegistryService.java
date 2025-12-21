@@ -28,8 +28,8 @@ public class ClientRegistryService {
     public void registerClient(final String clientId, final String conferenceId, final String eventId,
             final String conferenceName) {
         registry.put(clientId, new ClientInfo(conferenceId, eventId, conferenceName));
-        log.debug("📝 Registered clientId={} with conferenceId={}, eventId={}", 
-                clientId, conferenceId, eventId);
+        log.debug("📝 Registered clientId={} with conferenceId={}, eventId={}, conferenceName={}", 
+                clientId, conferenceId, eventId, conferenceName);
     }
 
     /**
@@ -38,8 +38,8 @@ public class ClientRegistryService {
     public Optional<ClientInfo> getClientInfo(final String clientId) {
         ClientInfo info = registry.get(clientId);
         if (info != null) {
-            log.debug("✅ Found clientInfo for clientId={}: conferenceId={}, eventId={}", 
-                    clientId, info.conferenceId, info.eventId);
+            log.debug("✅ Found clientInfo for clientId={}: conferenceId={}, eventId={}, conferenceName={}", 
+                    clientId, info.conferenceId, info.eventId, info.conferenceName);
             return Optional.of(info);
         }
         log.warn("❌ No clientInfo found for clientId={}", clientId);

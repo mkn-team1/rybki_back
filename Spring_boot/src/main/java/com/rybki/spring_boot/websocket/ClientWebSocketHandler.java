@@ -11,7 +11,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rybki.spring_boot.repository.RedisClientRepository;
+import com.rybki.spring_boot.repository.RedisEventRepository;
 import com.rybki.spring_boot.service.BotService;
+import com.rybki.spring_boot.service.ClientNotificationService;
 import com.rybki.spring_boot.service.ClientRegistryService;
 import com.rybki.spring_boot.service.IdeaService;
 import com.rybki.spring_boot.service.SessionService;
@@ -30,12 +32,14 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private static final String EVENT_ID_PARAM = "eventId";
 
     private final SessionService sessionService;
+    private final ClientNotificationService clientNotificationService;
     private final VoteService voteService;
 
     private final IdeaService ideaService;
     private final BotService botService;
     private final ClientRegistryService clientRegistryService;
     private final RedisClientRepository redisClientRepository;
+    private final RedisEventRepository redisEventRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -68,10 +72,18 @@ public class ClientWebSocketHandler implements WebSocketHandler {
         final String conferenceId = clientConfMapping.get().conferenceId;
         log.info("✅ Found conferenceId={} for clientId={}", conferenceId, clientId);
 
-        // Регистрируем clientID с его конференцией в реестре для последующего использования в SttResponseHandler
-        clientRegistryService.registerClient(clientId, conferenceId, eventId, "");
+        // Получаем имя конференции из Redis
+        final String conferenceName = redisEventRepository.getConferenceName(conferenceId)
+                .orElse("");
+        log.info("✅ Found conferenceName='{}' for conferenceId={} (clientId={})", conferenceName, conferenceId, clientId);
 
-        Mono<Void> register = sessionService.registerClient(session, clientId, conferenceId, eventId);
+        // Регистрируем clientID с его конференцией в реестре для последующего использования в SttResponseHandler
+        clientRegistryService.registerClient(clientId, conferenceId, eventId, conferenceName);
+
+        Mono<Void> register = sessionService.registerClient(session, clientId, conferenceId, conferenceName, eventId)
+            .then(Mono.fromRunnable(() -> log.info("📢 [SESSION] Participants count changed for conferenceId={}", conferenceId)))
+            .then(clientNotificationService.broadcastParticipantsCount(conferenceId,
+                sessionService.getParticipantsCountForConference(conferenceId)));
 
         Mono<Void> messages = session.receive()
             .flatMap(msg -> switch (msg.getType()) {
@@ -87,6 +99,8 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 clientRegistryService.unregisterClient(clientId);
                 botService.disconnectBot(conferenceId)
                     .then(sessionService.unregisterClient(session))
+                    .then(clientNotificationService.broadcastParticipantsCount(conferenceId,
+                            sessionService.getParticipantsCountForConference(conferenceId)))
                     .doOnSuccess(v -> log.info(
                         "Client disconnected: clientId={}, conferenceId={}, sessionId={}",
                         clientId, conferenceId, session.getId()
@@ -176,6 +190,8 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private Mono<Void> handleCreateIdea(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
                 .flatMap(cs -> {
+                    log.info("🔍 [WS] handleCreateIdea: cs.getConferenceId()={}, cs.getConferenceName()='{}', cs.getEventId()={}",
+                            cs.getConferenceId(), cs.getConferenceName(), cs.getEventId());
                     final JsonNode dataNode = jsonNode.path("data");
                     final String ideaTitle = dataNode.path("title").asText();
                     final String ideaDescription = dataNode.path("description").asText("");

@@ -80,6 +80,8 @@ public class IdeaService {
     public Mono<Void> createIdeaFromFront(final String conferenceId, final String conferenceName,
             final String eventId, final String title, final String description) {
         final String safeName = conferenceName != null && !conferenceName.isEmpty() ? conferenceName : "Anonymous";
+        log.info("🔍 [IDEA-SERVICE] createIdeaFromFront called: conferenceId={}, conferenceName={}, safeName={}, eventId={}, title={}",
+                conferenceId, conferenceName, safeName, eventId, title);
         final com.rybki.spring_boot.model.domain.redis.Idea idea = com.rybki.spring_boot.model.domain.redis.Idea
                 .builder()
                 .ideaId(UUID.randomUUID().toString())
@@ -99,8 +101,8 @@ public class IdeaService {
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
                 .then(clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, idea))
-                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front and broadcast to conference: ideaId={}, conferenceId={}", 
-                        idea.getIdeaId(), conferenceId));
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front and broadcast to conference: ideaId={}, conferenceId={}, conferenceName={}", 
+                        idea.getIdeaId(), conferenceId, idea.getConferenceName()));
     }
 
     public Mono<Void> deleteIdea(String conferenceId, String eventId, String ideaId) {
