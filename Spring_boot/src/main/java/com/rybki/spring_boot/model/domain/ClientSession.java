@@ -11,5 +11,6 @@ public class ClientSession {
     private String conferenceId;
     private String conferenceName;
     private String eventId;
+    private String clientId;
     private WebSocketSession session;
 }

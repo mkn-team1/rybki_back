@@ -1,8 +1,5 @@
 package com.rybki.spring_boot.repository;
 
-import static com.rybki.spring_boot.repository.RedisKeys.eventKey;
-import static com.rybki.spring_boot.repository.RedisKeys.eventParticipantsKey;
-
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,13 +7,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import com.rybki.spring_boot.model.domain.redis.Event;
-import com.rybki.spring_boot.model.domain.redis.EventStatus;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Repository;
+
+import com.rybki.spring_boot.model.domain.redis.Event;
+import com.rybki.spring_boot.model.domain.redis.EventStatus;
+import static com.rybki.spring_boot.repository.RedisKeys.eventKey;
+import static com.rybki.spring_boot.repository.RedisKeys.eventParticipantsKey;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -238,6 +239,78 @@ public class RedisEventRepository {
             return event.map(Event::getStatus);
         } catch (final Exception e) {
             log.error("Error getting event status: {}", eventId, e);
+            return Optional.empty();
+        }
+    }
+
+    // СОХРАНЕНИЕ ИМЕНИ КОНФЕРЕНЦИИ
+    public void saveConferenceName(final String conferenceId, final String conferenceName, final String eventId) {
+        try {
+            if (!isRedisConnected()) {
+                throw new RuntimeException("Redis is not connected");
+            }
+            // Сохраняем имя конференции по её ID
+            final String nameKey = RedisKeys.conferenceNameKey(conferenceId);
+            redisTemplate.opsForValue().set(nameKey, conferenceName);
+
+            // Сохраняем обратное соответствие: имя -> ID (для быстрого поиска)
+            final String nameToIdKey = RedisKeys.eventConferenceNameKey(eventId, conferenceName);
+            redisTemplate.opsForValue().set(nameToIdKey, conferenceId);
+
+            log.info("✅ Saved conference name: conferenceId={}, conferenceName={}, eventId={}",
+                    conferenceId, conferenceName, eventId);
+        } catch (final Exception e) {
+            log.error("❌ Error saving conference name: conferenceId={}, conferenceName={}", 
+                    conferenceId, conferenceName, e);
+        }
+    }
+
+    // ПОЛУЧЕНИЕ КОНФЕРЕНЦИИ ПО ИМЕНИ В EVENT
+    public Optional<String> findConferenceByName(final String eventId, final String conferenceName) {
+        try {
+            if (!isRedisConnected()) {
+                throw new RuntimeException("Redis is not connected");
+            }
+            final String key = RedisKeys.eventConferenceNameKey(eventId, conferenceName);
+            final Object result = redisTemplate.opsForValue().get(key);
+            
+            if (result != null) {
+                final String conferenceId = result.toString();
+                log.debug("✅ Found conference by name: eventId={}, conferenceName={}, conferenceId={}",
+                        eventId, conferenceName, conferenceId);
+                return Optional.of(conferenceId);
+            }
+            
+            log.debug("⚠️ No conference found for: eventId={}, conferenceName={}", eventId, conferenceName);
+            return Optional.empty();
+        } catch (final Exception e) {
+            log.error("❌ Error finding conference by name: eventId={}, conferenceName={}", 
+                    eventId, conferenceName, e);
+            return Optional.empty();
+        }
+    }
+
+    // ПОЛУЧЕНИЕ ИМЕНИ КОНФЕРЕНЦИИ ПО ID
+    public Optional<String> getConferenceName(final String conferenceId) {
+        try {
+            if (!isRedisConnected()) {
+                throw new RuntimeException("Redis is not connected");
+            }
+            final String key = RedisKeys.conferenceNameKey(conferenceId);
+            final Object result = redisTemplate.opsForValue().get(key);
+            
+            if (result != null) {
+                final String conferenceName = result.toString();
+                log.info("✅ Found conference name: conferenceId={}, conferenceName={}",
+                        conferenceId, conferenceName);
+                return Optional.of(conferenceName);
+            }
+            
+            log.warn("⚠️ No conference name found for: conferenceId={}", conferenceId);
+            return Optional.empty();
+        } catch (final Exception e) {
+            log.error("❌ Error getting conference name: conferenceId={}", 
+                    conferenceId, e);
             return Optional.empty();
         }
     }

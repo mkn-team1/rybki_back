@@ -10,7 +10,11 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rybki.spring_boot.repository.RedisClientRepository;
+import com.rybki.spring_boot.repository.RedisEventRepository;
 import com.rybki.spring_boot.service.BotService;
+import com.rybki.spring_boot.service.ClientNotificationService;
+import com.rybki.spring_boot.service.ClientRegistryService;
 import com.rybki.spring_boot.service.IdeaService;
 import com.rybki.spring_boot.service.SessionService;
 import com.rybki.spring_boot.service.VoteService;
@@ -28,10 +32,14 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private static final String EVENT_ID_PARAM = "eventId";
 
     private final SessionService sessionService;
+    private final ClientNotificationService clientNotificationService;
     private final VoteService voteService;
 
     private final IdeaService ideaService;
     private final BotService botService;
+    private final ClientRegistryService clientRegistryService;
+    private final RedisClientRepository redisClientRepository;
+    private final RedisEventRepository redisEventRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -43,23 +51,41 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 .build()
                 .getQueryParams();
 
+        final String clientId = queryParams.getFirst(CLIENT_ID_PARAM);
         final String eventId = queryParams.getFirst(EVENT_ID_PARAM);
-        final String conferenceId = queryParams.getFirst(CLIENT_ID_PARAM);
 
-        if (!StringUtils.hasText(conferenceId) || !StringUtils.hasText(eventId)) {
+        if (!StringUtils.hasText(clientId) || !StringUtils.hasText(eventId)) {
+            log.warn("Missing required params: clientId={}, eventId={}",
+                    clientId, eventId);
             return session.close();
         }
 
-        // return sessionService.registerClient(session, conferenceId, eventId)
-        //         .thenMany(session.receive())
-        //         .flatMap(message -> switch (message.getType()) {
-        //             case TEXT -> handleTextMessage(session, message);
-        //             // case BINARY -> handleBinaryMessage(session, message);
-        //             default -> Mono.empty();
-        //         })
-        //         .then(handleClientDisconnect(session, conferenceId));
+        // Пытаемся получить conferenceId из Redis по clientId
+        // (он был сохранён при join event в EventService)
+        final var clientConfMapping = redisClientRepository.getClientConference(clientId);
+        
+        if (clientConfMapping.isEmpty()) {
+            log.warn("❌ No conference mapping found for clientId={}", clientId);
+            return session.close();
+        }
+        
+        final String conferenceId = clientConfMapping.get().conferenceId;
+        log.info("✅ Found conferenceId={} for clientId={}", conferenceId, clientId);
 
-        Mono<Void> register = sessionService.registerClient(session, conferenceId, eventId);
+        // Получаем имя конференции из Redis
+        final String conferenceName = redisEventRepository.getConferenceName(conferenceId)
+                .orElse("");
+        log.info("✅ Found conferenceName='{}' for conferenceId={} (clientId={})", conferenceName, conferenceId, clientId);
+
+        // Регистрируем clientID с его конференцией в реестре для последующего использования в SttResponseHandler
+        clientRegistryService.registerClient(clientId, conferenceId, eventId, conferenceName);
+
+        Mono<Void> register = sessionService.registerClient(session, clientId, conferenceId, conferenceName, eventId)
+            .then(Mono.fromRunnable(() -> log.info("📢 [SESSION] Participants count changed for conferenceId={}", conferenceId)))
+            .then(clientNotificationService.broadcastParticipantsCount(conferenceId,
+                sessionService.getParticipantsCountForConference(conferenceId)))
+            // Отправляем новому участнику все существующие LOCAL идеи конференции
+            .then(ideaService.sendExistingIdeasToClient(conferenceId, eventId));
 
         Mono<Void> messages = session.receive()
             .flatMap(msg -> switch (msg.getType()) {
@@ -69,13 +95,17 @@ public class ClientWebSocketHandler implements WebSocketHandler {
             })
             .then() 
             .doFinally(signalType -> {
-                log.info("WS finished: conferenceId={}, sessionId={}, signal={}",
-                        conferenceId, session.getId(), signalType);
+                log.info("WS finished: clientId={}, conferenceId={}, sessionId={}, signal={}",
+                        clientId, conferenceId, session.getId(), signalType);
+                // Удаляем из реестра при отключении
+                clientRegistryService.unregisterClient(clientId);
                 botService.disconnectBot(conferenceId)
                     .then(sessionService.unregisterClient(session))
+                    .then(clientNotificationService.broadcastParticipantsCount(conferenceId,
+                            sessionService.getParticipantsCountForConference(conferenceId)))
                     .doOnSuccess(v -> log.info(
-                        "Client disconnected: conferenceId={}, sessionId={}",
-                        conferenceId, session.getId()
+                        "Client disconnected: clientId={}, conferenceId={}, sessionId={}",
+                        clientId, conferenceId, session.getId()
                     ))
                     .subscribe();
             });
@@ -162,6 +192,8 @@ public class ClientWebSocketHandler implements WebSocketHandler {
     private Mono<Void> handleCreateIdea(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
                 .flatMap(cs -> {
+                    log.info("🔍 [WS] handleCreateIdea: cs.getConferenceId()={}, cs.getConferenceName()='{}', cs.getEventId()={}",
+                            cs.getConferenceId(), cs.getConferenceName(), cs.getEventId());
                     final JsonNode dataNode = jsonNode.path("data");
                     final String ideaTitle = dataNode.path("title").asText();
                     final String ideaDescription = dataNode.path("description").asText("");
@@ -208,9 +240,9 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                         log.warn("Empty ideaId: conferenceId={}, eventId={}", cs.getConferenceId(), cs.getEventId());
                         return Mono.<Void>empty();
                     }
-                    log.info("React to idea: conferenceId={}, eventId={}, ideaId={}, reaction={}", cs.getConferenceId(),
-                            cs.getEventId(), ideaId, reactionType);
-                    return ideaService.reactToIdea(cs.getConferenceId(), cs.getEventId(), ideaId, reactionType);
+                    log.info("React to idea: conferenceId={}, eventId={}, ideaId={}, reaction={}, clientId={}", cs.getConferenceId(),
+                            cs.getEventId(), ideaId, reactionType, cs.getClientId());
+                    return ideaService.reactToIdea(cs.getConferenceId(), cs.getEventId(), ideaId, reactionType, cs.getClientId());
                 })
                 .onErrorResume(e -> {
                     log.warn("React to idea from unregistered session or error: sessionId={}", session.getId());
