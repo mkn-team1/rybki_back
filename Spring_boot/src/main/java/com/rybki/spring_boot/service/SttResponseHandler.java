@@ -14,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SttResponseHandler {
 
     private final IdeaService ideaService;
-    private final SessionService sessionService;
+    private final ClientRegistryService clientRegistryService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @SuppressWarnings("checkstyle:IllegalCatch")
@@ -25,17 +25,25 @@ public class SttResponseHandler {
             final String type = node.path("type").asText();
 
             if ("final_text".equals(type)) {
-                final String conferenceId = node.path("clientId").asText();
-                final String eventId = node.path("eventId").asText();
+                final String clientId = node.path("clientId").asText();
                 final String text = node.path("text").asText();
 
-                log.info("📤 [STT] Received final_text from STT: conferenceId={}, eventId={}, text={}",
-                        conferenceId, eventId, text);
+                log.info("📤 [STT] Received final_text from STT: clientId={}, text length={}",
+                        clientId, text.length());
 
-                
-                sessionService.getClientSession(conferenceId)
-                        .flatMap(cs -> ideaService.processText(conferenceId, cs.getConferenceName(), eventId, text))
-                        .subscribe();
+                // Автоматически определяем конференцию по clientID
+                clientRegistryService.getClientInfo(clientId)
+                    .ifPresentOrElse(
+                        info -> {
+                            log.info("✅ [STT-HANDLER] Found conference info: clientId={}, conferenceId={}, eventId={}",
+                                    clientId, info.conferenceId(), info.eventId());
+                            ideaService.processText(info.conferenceId(), info.conferenceName(), info.eventId(), text)
+                                .subscribe();
+                        },
+                        () -> {
+                            log.warn("❌ [STT-HANDLER] No conference info found for clientId={}", clientId);
+                        }
+                    );
                 
             } else {
                 log.debug("Unknown STT message type: {}", type);

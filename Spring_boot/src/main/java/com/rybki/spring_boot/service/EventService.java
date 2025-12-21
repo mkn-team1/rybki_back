@@ -17,6 +17,7 @@ import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventRequ
 import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventResponse;
 import com.rybki.spring_boot.model.domain.redis.Event;
 import com.rybki.spring_boot.model.domain.redis.EventStatus;
+import com.rybki.spring_boot.repository.RedisClientRepository;
 import com.rybki.spring_boot.repository.RedisEventRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -28,12 +29,15 @@ import lombok.extern.slf4j.Slf4j;
 public class EventService {
 
     private final RedisEventRepository eventRepository;
+    private final RedisClientRepository redisClientRepository;
 
     public CreateEventResponse createEvent(final CreateEventRequest eventRequest) {
         final String conferenceId = UUID.randomUUID().toString();
         final String eventId = UUID.randomUUID().toString();
+        final String clientId = UUID.randomUUID().toString();
+        final String conferenceName = eventRequest.getEventName();
 
-        log.info("Creating new event: eventId={}, conferenceId={}", eventId, conferenceId);
+        log.info("Creating new event: eventId={}, conferenceId={}, clientId={}", eventId, conferenceId, clientId);
 
         final Event event = Event.builder()
                 .eventId(eventId)
@@ -46,11 +50,13 @@ public class EventService {
         eventRepository.createEvent(event);
 
         eventRepository.addParticipant(eventId, conferenceId);
+        eventRepository.saveConferenceName(conferenceId, conferenceName, eventId);
+        redisClientRepository.saveClientConference(clientId, conferenceId, eventId);
 
-        log.info("Event created successfully: eventId={}", eventId);
+        log.info("Event created successfully: eventId={}, clientId={}", eventId, clientId);
 
         return CreateEventResponse.builder()
-
+                .clientId(clientId)
                 .conferenceId(conferenceId)
                 .eventName(eventRequest.getEventName())
                 .eventId(eventId)
@@ -68,20 +74,42 @@ public class EventService {
             throw new BadRequestException("Cannot join ended event: " + eventId);
         }
 
-        String conferenceId = UUID.randomUUID().toString();
+        final String conferenceName = joinEventRequest.getConferenceName();
+        String conferenceId;
 
-        while (eventRepository.isParticipant(eventId, conferenceId)) {
+        // Проверяем, есть ли уже конференция с таким именем в этом event
+        final var existingConference = eventRepository.findConferenceByName(eventId, conferenceName);
+
+        if (existingConference.isPresent()) {
+            // Подключаем к существующей конференции
+            conferenceId = existingConference.get();
+            log.info("✅ Found existing conference: eventId={}, conferenceName={}, conferenceId={}",
+                    eventId, conferenceName, conferenceId);
+        } else {
+            // Создаём новую конференцию
             conferenceId = UUID.randomUUID().toString();
+
+            while (eventRepository.isParticipant(eventId, conferenceId)) {
+                conferenceId = UUID.randomUUID().toString();
+            }
+
+            eventRepository.addParticipant(eventId, conferenceId);
+            eventRepository.saveConferenceName(conferenceId, conferenceName, eventId);
+
+            log.info("✅ Created new conference: eventId={}, conferenceName={}, conferenceId={}",
+                    eventId, conferenceName, conferenceId);
         }
 
-        eventRepository.addParticipant(eventId, conferenceId);
+        // Генерируем уникальный clientId и сохраняем соответствие clientId -> conferenceId в Redis
+        final String clientId = UUID.randomUUID().toString();
+        redisClientRepository.saveClientConference(clientId, conferenceId, eventId);
 
-        log.info("Client {} successfully joined event {}", conferenceId, eventId);
+        log.info("Client {} successfully joined event {} with conference {}", clientId, eventId, conferenceId);
 
         return JoinEventResponse.builder()
-
+                .clientId(clientId)
                 .conferenceId(conferenceId)
-                .conferenceName(joinEventRequest.getConferenceName())
+                .conferenceName(conferenceName)
                 .eventName("") // TODO: получить из Event если добавить поле
                 .eventId(eventId)
                 .build();

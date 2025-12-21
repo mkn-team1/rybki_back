@@ -9,12 +9,14 @@ import org.springframework.web.reactive.socket.WebSocketSession;
 
 import com.rybki.spring_boot.model.domain.ClientSession;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class SessionService {
 
     // sessionId -> ClientSession
@@ -33,26 +35,31 @@ public class SessionService {
     // Регистрирует новую WS-сессию клиента
     public Mono<Void> registerClient(final WebSocketSession session, final String conferenceId,
             final String eventId) {
-        return registerClient(session, conferenceId, "", eventId)
+        return registerClient(session, null, conferenceId, "", eventId)
                 .doOnSuccess(v -> log.info("Registered client: conferenceId={}, eventId={}", conferenceId, eventId));
     }
 
     public Mono<Void> registerClient(final WebSocketSession session, final String conferenceId,
             final String conferenceName, final String eventId) {
-        return Mono.fromRunnable(() -> {
-            clientSessions.put(session.getId(), ClientSession.builder().conferenceId(conferenceId)
-                    .conferenceName(conferenceName).eventId(eventId).session(session).build());
-            log.info("Registered session: sessionId={}, conferenceId={}, eventId={}",
-                    session.getId(), conferenceId, eventId);
+        return registerClient(session, null, conferenceId, conferenceName, eventId);
+    }
 
+    public Mono<Void> registerClient(final WebSocketSession session, final String clientId, final String conferenceId,
+            final String conferenceName, final String eventId) {
+        return Mono.fromRunnable(() -> {
+            clientSessions.put(session.getId(), ClientSession.builder().clientId(clientId).conferenceId(conferenceId)
+                    .conferenceName(conferenceName).eventId(eventId).session(session).build());
+            log.info("Registered session: sessionId={}, clientId={}, conferenceId={}, conferenceName={}, eventId={}",
+                    session.getId(), clientId, conferenceId, conferenceName, eventId);
         });
     }
 
     public Mono<Void> unregisterClient(final WebSocketSession session) {
-        return Mono.fromRunnable(() -> {
-            clientSessions.remove(session.getId());
+        return Mono.fromCallable(() -> {
+            final ClientSession cs = clientSessions.remove(session.getId());
             log.debug("Client unregistered: sessionId={}", session.getId());
-        });
+            return cs;
+        }).then();
     }
 
     public Mono<ClientSession> getSessionData(final WebSocketSession session) {
@@ -72,6 +79,22 @@ public class SessionService {
                 .filter(cs -> cs.getEventId().equals(eventId))
                 .toList();
         return Flux.fromIterable(list);
+    }
+
+    // Получить все сессии для конкретной конференции
+    public Flux<ClientSession> getSessionsForConference(final String conferenceId) {
+        final List<ClientSession> list = clientSessions.values().stream()
+                .filter(cs -> cs.getConferenceId().equals(conferenceId))
+                .toList();
+        log.debug("Found {} sessions for conferenceId={}", list.size(), conferenceId);
+        return Flux.fromIterable(list);
+    }
+
+    // Получить количество участников в конференции
+    public int getParticipantsCountForConference(final String conferenceId) {
+        return (int) clientSessions.values().stream()
+                .filter(cs -> cs.getConferenceId().equals(conferenceId))
+                .count();
     }
 
     // Получить WS-сессию по eventId и conferenceId
