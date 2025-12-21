@@ -60,7 +60,7 @@ public class IdeaService {
                 .conferenceName(safeName)
                 .title(idea.title())
                 .description(idea.description())
-                .status(IdeaStatus.PENDING)
+                .status(IdeaStatus.LOCAL)
                 .createdAt(Instant.now().toString())
                 .author(safeName)
                 .likes(0)
@@ -88,7 +88,7 @@ public class IdeaService {
                 .conferenceName(safeName)
                 .title(title)
                 .description(description)
-                .status(IdeaStatus.PENDING)
+                .status(IdeaStatus.LOCAL)
                 .createdAt(Instant.now().toString())
                 .author(safeName)
                 .likes(0)
@@ -125,9 +125,10 @@ public class IdeaService {
 
     private Mono<Void> handleAcceptReaction(String conferenceId, String eventId, String ideaId,
             com.rybki.spring_boot.model.domain.redis.Idea idea) {
-        idea.setStatus(IdeaStatus.ACCEPTED);
+        idea.setStatus(IdeaStatus.GOLDEN);
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
                 .then(clientNotificationService.broadcastIdea(conferenceId, eventId, idea))
+                .then(clientNotificationService.broadcastIdeaStatusChanged(eventId, conferenceId, ideaId, "golden"))
                 .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea accepted and broadcast: ideaId={}", ideaId));
     }
 
@@ -157,6 +158,7 @@ public class IdeaService {
         
         if (shouldPromoteToGlobal) {
             idea.setPromotedToGlobalAt(Instant.now().toString());
+            idea.setStatus(IdeaStatus.GLOBAL);
             ideaRepository.saveIdea(idea);
             log.info("🚀 [IDEA-SERVICE] Idea promoted to GLOBAL: ideaId={}, likes={}, participants={}", 
                     ideaId, likes, participantsCount);

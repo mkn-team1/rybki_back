@@ -32,7 +32,7 @@ public class RedisIdeaRepository {
 
     public void moveIdeaToAccepted(final String ideaId, final String eventId) {
         final Idea idea = findIdeaById(ideaId).orElseThrow();
-        idea.setStatus(IdeaStatus.ACCEPTED);
+        idea.setStatus(IdeaStatus.GOLDEN);
 
         final String ideaKey = RedisKeys.ideaKey(ideaId);
         redisTemplate.opsForValue().set(ideaKey, idea);
@@ -47,7 +47,7 @@ public class RedisIdeaRepository {
 
     public void moveIdeaToRejected(final String ideaId, final String eventId) {
         final Idea idea = findIdeaById(ideaId).orElseThrow();
-        idea.setStatus(IdeaStatus.ACCEPTED);
+        idea.setStatus(IdeaStatus.LOCAL);
 
         final String ideaKey = RedisKeys.ideaKey(ideaId);
         redisTemplate.opsForValue().set(ideaKey, idea);
