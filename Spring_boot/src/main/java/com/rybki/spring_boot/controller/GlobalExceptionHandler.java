@@ -1,6 +1,7 @@
 package com.rybki.spring_boot.controller;
 
 import com.rybki.spring_boot.exception.BadRequestException;
+import com.rybki.spring_boot.exception.InternalServerErrorException;
 import com.rybki.spring_boot.exception.NotFoundException;
 import com.rybki.spring_boot.exception.UnprocessableEntityException;
 
@@ -25,5 +26,10 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UnprocessableEntityException.class)
     public ResponseEntity<String> handleUnprocessableEntity(final UnprocessableEntityException ex) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(InternalServerErrorException.class)
+    public ResponseEntity<String> handleInternalServerError(final InternalServerErrorException ex) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
     }
 }

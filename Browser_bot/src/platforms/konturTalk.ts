@@ -12,7 +12,7 @@ export class KonturTalkConnector extends BasePlatformConnector {
   protected async joinRoom(page: Page, task: JoinConferenceTask): Promise<void> {
     // Ввод имени
     const form = page.locator("form").first();
-    await form.waitFor({ timeout: 15000 });
+    await form.waitFor({ timeout: 20000 });
     await form.locator("input").nth(0).fill("AI Assistant");
     await page.locator("div.action.submit-button button").first().click();
 

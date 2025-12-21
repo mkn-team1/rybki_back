@@ -101,7 +101,10 @@ public class SessionService {
 
     public Mono<Void> unregisterBot(final String botId) {
         return Mono.fromRunnable(() -> {
-            micMuted.remove(botSessions.get(botId));
+            WebSocketSession session = botSessions.get(botId);
+            if (session != null) {
+                micMuted.remove(session);
+            }
             botSessions.remove(botId);
             String conferenceId = botToClient.remove(botId);
             if (conferenceId != null) {
@@ -109,6 +112,13 @@ public class SessionService {
             }
             log.debug("Bot unregistered: botId={}", botId);
         });
+    }
+
+    public void unlinkBot(final String botId) {
+        String conferenceId = botToClient.remove(botId);
+        if (conferenceId != null) {
+            clientToBot.remove(conferenceId);
+        }
     }
 
     public WebSocketSession getBotSession(final String botId) {

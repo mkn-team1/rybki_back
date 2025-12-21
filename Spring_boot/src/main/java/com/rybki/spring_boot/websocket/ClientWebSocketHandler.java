@@ -95,7 +95,7 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                         case "create_idea" -> handleCreateIdea(session, jsonNode);
                         case "delete_idea" -> handleDeleteIdea(session, jsonNode);
                         case "react_to_idea" -> handleReactToIdea(session, jsonNode);
-                        case "connect_bot" -> handleConnectBot(session, jsonNode);
+                        // case "connect_bot" -> handleConnectBot(session, jsonNode);
                         case "disconnect_bot" -> handleDisconnectBot(session, jsonNode);
                         case "ask_question" -> handleAskQuestion(session, jsonNode);
                         case "switch_mic" -> handleMicSwitch(session, jsonNode);
@@ -204,26 +204,26 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                 });
     }
 
-    private Mono<Void> handleConnectBot(final WebSocketSession session, final JsonNode jsonNode) {
-        return sessionService.getSessionData(session)
-                .flatMap(cs -> {
-                    final String talkLink = jsonNode.path("talkLink").asText();
-                    final String platform = "kontur_talk"; // Пока только kontur_talk
+    // private Mono<Void> handleConnectBot(final WebSocketSession session, final JsonNode jsonNode) {
+    //     return sessionService.getSessionData(session)
+    //             .flatMap(cs -> {
+    //                 final String talkLink = jsonNode.path("talkLink").asText();
+    //                 final String platform = "kontur_talk"; // Пока только kontur_talk
 
-                    // TODO: во первых добавить проверку ссылки, во вторых придумать как возвращать ошибку, 
-                    // если ссылка неправильная (и изменить на meetingUrl)
+    //                 // TODO: во первых добавить проверку ссылки, во вторых придумать как возвращать ошибку, 
+    //                 // если ссылка неправильная (и изменить на meetingUrl)
 
-                    log.info("Connect bot request: conferenceId={}, eventId={}, talkLink={}, platform={}",
-                            cs.getConferenceId(), cs.getEventId(), talkLink, platform);
+    //                 log.info("Connect bot request: conferenceId={}, eventId={}, talkLink={}, platform={}",
+    //                         cs.getConferenceId(), cs.getEventId(), talkLink, platform);
 
-                    return botService.createBot(cs.getConferenceId(), talkLink, platform);
-                })
-                .onErrorResume(e -> {
-                    log.error("Failed to send connect bot command: sessionId={}, error={}",
-                            session.getId(), e.getMessage());
-                    return Mono.empty();
-                });
-    }
+    //                 return botService.createBot(cs.getConferenceId(), talkLink, platform);
+    //             })
+    //             .onErrorResume(e -> {
+    //                 log.error("Failed to send connect bot command: sessionId={}, error={}",
+    //                         session.getId(), e.getMessage());
+    //                 return Mono.empty();
+    //             });
+    // }
 
     private Mono<Void> handleDisconnectBot(final WebSocketSession session, final JsonNode jsonNode) {
         return sessionService.getSessionData(session)
