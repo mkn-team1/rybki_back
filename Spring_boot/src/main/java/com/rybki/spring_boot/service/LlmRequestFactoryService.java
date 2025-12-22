@@ -150,4 +150,17 @@ public class LlmRequestFactoryService {
             }
         }
     }
+
+    /**
+     * Создать пользовательский LLM запрос с произвольным текстом.
+     *
+     * @param text текст запроса
+     * @return LLM запрос
+     */
+    public LlmRequest createCustomRequest(final String text) {
+        final List<GigaChatRequestDto.Message> messages = List.of(
+            GigaChatRequestDto.getUserMessage(text)
+        );
+        return new LlmRequestImpl(messages); // внутренний класс виден внутри сервиса
+    }
 }

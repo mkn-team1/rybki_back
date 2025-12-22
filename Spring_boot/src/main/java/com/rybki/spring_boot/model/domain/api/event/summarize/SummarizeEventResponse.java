@@ -6,5 +6,5 @@ import lombok.Data;
 @Data
 @Builder
 public class SummarizeEventResponse {
-    // TODO: Добавить поля ответа по итогам события
+    private String summaryText;
 }
