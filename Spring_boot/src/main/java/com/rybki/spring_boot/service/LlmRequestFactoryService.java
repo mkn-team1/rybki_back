@@ -20,6 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 public class LlmRequestFactoryService {
 
     private static final int MAX_MESSAGES = 4;
+    private static final int MAX_IDEAS_HISTORY = 5;
     private final Queue<String> lastMessages = new LinkedList<>();
     private final Queue<List<String>> foundIdeas = new LinkedList<>();
 
@@ -36,8 +37,23 @@ public class LlmRequestFactoryService {
         messages.add(systemPrompt);
 
         if (!foundIdeas.isEmpty()) {
+            final List<String> allIdeas = new LinkedList<>();
+            for (final List<String> list : foundIdeas) {
+                allIdeas.addAll(list);
+            }
+
+            final List<String> lastIdeas;
+            if (allIdeas.size() > MAX_IDEAS_HISTORY) {
+                lastIdeas = allIdeas.subList(allIdeas.size() - MAX_IDEAS_HISTORY, allIdeas.size());
+            } else {
+                lastIdeas = allIdeas;
+            }
+
+            final Queue<List<String>> ideasToSend = new LinkedList<>();
+            ideasToSend.add(lastIdeas);
+
             final GigaChatRequestDto.Message previousIdeasMessage =
-                    GigaChatRequestDto.getPreviousIdeasMessage(foundIdeas);
+                    GigaChatRequestDto.getPreviousIdeasMessage(ideasToSend);
             messages.add(previousIdeasMessage);
         }
 

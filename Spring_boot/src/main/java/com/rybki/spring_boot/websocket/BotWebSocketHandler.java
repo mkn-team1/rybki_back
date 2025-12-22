@@ -70,23 +70,23 @@ public class BotWebSocketHandler implements WebSocketHandler {
                 final byte[] bytes = new byte[msg.getPayload().readableByteCount()];
                 msg.getPayload().read(bytes);
 
-                // Найти клиентId, связанного с ботом
-                String conferenceId = sessionService.getClientForBot(botId);
+                // Найти conferenceId, связанного с ботом
+                String conferenceId = sessionService.getConferenceForBot(botId);
                 if (conferenceId == null) {
-                    log.debug("Bot {} sent audio but no linked client — ignoring", botId);
+                    log.debug("Bot {} sent audio but no linked conference — ignoring", botId);
                     return;
                 }
 
                 // Получить ClientSession по conferenceId
-                sessionService.getClientSession(conferenceId)
-                    .flatMap(cs ->
+                sessionService.getConferenceInfo(conferenceId)
+                    .flatMap(c ->
                         sttRoutingService.forwardAudio(
-                            cs.getConferenceId(),   // conferenceId
-                            cs.getEventId(),        // eventId
+                            c.getConferenceId(),   // conferenceId
+                            c.getEventId(),        // eventId
                             bytes                   // PCM audio
                         )
                         .then(
-                            audioDumpService.append(cs.getSession().getId(), bytes)
+                            audioDumpService.append(c.getConferenceId(), bytes)
                         )
                     )
                     .doOnError(e -> log.error("Failed to forward audio from bot {}", botId, e))

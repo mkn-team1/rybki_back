@@ -37,7 +37,7 @@ public class AudioDumpService {
 
     private final Map<String, Writer> writers = new ConcurrentHashMap<>();
 
-    public Mono<Void> start(String sessionId, String conferenceId, String eventId) {
+    public Mono<Void> start(String conferenceId, String eventId) {
         if (!enabled) return Mono.empty();
         return Mono.fromRunnable(() -> {
                 try {
@@ -45,53 +45,53 @@ public class AudioDumpService {
                     final String ts = DateTimeFormatter.ISO_INSTANT.format(Instant.now()).replace(":", "-");
                     final Path path = BASE_DIR.resolve(safe(eventId))
                                              .resolve(safe(conferenceId))
-                                             .resolve(ts + "-" + sessionId + ".wav");
+                                             .resolve(ts + ".wav");
 
                     final Writer w = new Writer(path, SAMPLE_RATE, CHANNELS, BITS_PER_SAMPLE);
                     w.open();
-                    final Writer prev = writers.put(sessionId, w);
+                    final Writer prev = writers.put(conferenceId, w);
                     if (prev != null) {
                         try { prev.close(); } catch (Exception ignore) {}
                     }
-                    log.info("AUDIO DUMP STARTED: sessionId={}, conferenceId={}, eventId={}, sr=16000, path={}", 
-                             sessionId, conferenceId, eventId, path);
+                    log.info("AUDIO DUMP STARTED: conferenceId={}, eventId={}, sr=16000, path={}", 
+                             conferenceId, eventId, path);
                 } catch (Exception e) {
-                    log.error("Audio dump start failed: sessionId={}", sessionId, e);
+                    log.error("Audio dump start failed: conferenceId={}", conferenceId, e);
                 }
             })
             .subscribeOn(Schedulers.boundedElastic())
             .then();
     }
 
-    public Mono<Void> append(String sessionId, byte[] pcm) {
+    public Mono<Void> append(String conferenceId, byte[] pcm) {
         if (!enabled || pcm == null || pcm.length == 0) return Mono.empty();
         return Mono.fromRunnable(() -> {
-                final Writer w = writers.get(sessionId);
+                final Writer w = writers.get(conferenceId);
                 if (w == null) return;
                 try {
                     w.append(pcm);
-                    log.debug("AUDIO DUMP APPEND: sessionId={}, +{} bytes, total={} bytes", 
-                              sessionId, pcm.length, w.getDataBytes());
+                    log.debug("AUDIO DUMP APPEND: conferenceId={}, +{} bytes, total={} bytes", 
+                              conferenceId, pcm.length, w.getDataBytes());
                 } catch (Exception e) {
-                    log.error("Audio dump append failed: sessionId={}", sessionId, e);
+                    log.error("Audio dump append failed: conferenceId={}", conferenceId, e);
                 }
             })
             .subscribeOn(Schedulers.boundedElastic())
             .then();
     }
 
-    public Mono<Void> stop(String sessionId) {
+    public Mono<Void> stop(String conferenceId) {
         if (!enabled) return Mono.empty();
         return Mono.fromRunnable(() -> {
-                final Writer w = writers.remove(sessionId);
+                final Writer w = writers.remove(conferenceId);
                 if (w == null) return;
                 try {
                     w.close();
                     final double seconds = w.getDataBytes() / (double) (w.sampleRate * w.blockAlign());
-                    log.info("AUDIO DUMP STOP: sessionId={}, path={}, totalBytes={}, durationSec={}", 
-                             sessionId, w.path, w.getDataBytes(), String.format("%.2f", seconds));
+                    log.info("AUDIO DUMP STOP: conferenceId={}, path={}, totalBytes={}, durationSec={}", 
+                             conferenceId, w.path, w.getDataBytes(), String.format("%.2f", seconds));
                 } catch (Exception e) {
-                    log.error("Audio dump stop failed: sessionId={}", sessionId, e);
+                    log.error("Audio dump stop failed: conferenceId={}", conferenceId, e);
                 }
             })
             .subscribeOn(Schedulers.boundedElastic())

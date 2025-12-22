@@ -118,41 +118,42 @@ public class ClientNotificationService {
     }
 
     /**
-     * Send bot connection notification to a specific client
+     * Send bot connection notification to a conference
      */
     public Mono<Void> botConnected(final String conferenceId, final String botId) {
-        return sendToClient(conferenceId, Map.of(
+        return broadcastToConference(conferenceId, Map.of(
                 "type", "bot_connected",
                 "botId", botId));
     }
 
     /**
-     * Send bot disconnection notification to a specific client
+     * Send bot disconnection notification to a conference
      */
     public Mono<Void> botDisconnected(final String conferenceId, final String botId) {
-        return sendToClient(conferenceId, Map.of(
+        return broadcastToConference(conferenceId, Map.of(
                 "type", "bot_disconnected",
                 "botId", botId));
     }
 
     /**
-     * Send answer on question to a specific client
+     * Send answer on question to a conference
      */
     public Mono<Void> sendQuestionAnswer(final String conferenceId, final String question, final String answer) {
-        return sendToClient(conferenceId, Map.of(
+        return broadcastToConference(conferenceId, Map.of(
                 "type", "question_answer",
                 "question", question,
                 "answer", answer));
     }
 
     /**
-     * Send message about current micro state
+     * Send message about current micro state to all conference participants
      */
     public Mono<Void> sendMicSwitchNotification(final String conferenceId, final Boolean micMuted) {
-        return sendToClient(conferenceId, Map.of(
+        return broadcastToConference(conferenceId, Map.of(
                 "type", "mic_switch",
                 "micMuted", micMuted));
-    
+    }
+
     /**
      * Broadcast participants count change to all clients in the conference
      */

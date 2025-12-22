@@ -13,8 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class SttResponseHandler {
 
+    private final SessionService sessionService; 
     private final IdeaService ideaService;
-    private final ClientRegistryService clientRegistryService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @SuppressWarnings("checkstyle:IllegalCatch")
@@ -25,25 +25,14 @@ public class SttResponseHandler {
             final String type = node.path("type").asText();
 
             if ("final_text".equals(type)) {
-                final String clientId = node.path("clientId").asText();
+                final String conferenceId = node.path("conferenceId").asText();
                 final String text = node.path("text").asText();
 
-                log.info("📤 [STT] Received final_text from STT: clientId={}, text length={}",
-                        clientId, text.length());
+                log.info("📤 [STT] Received final_text from STT: conferenceId={}, text: {}",
+                        conferenceId, text);
 
-                // Автоматически определяем конференцию по clientID
-                clientRegistryService.getClientInfo(clientId)
-                    .ifPresentOrElse(
-                        info -> {
-                            log.info("✅ [STT-HANDLER] Found conference info: clientId={}, conferenceId={}, eventId={}",
-                                    clientId, info.conferenceId(), info.eventId());
-                            ideaService.processText(info.conferenceId(), info.conferenceName(), info.eventId(), text)
-                                .subscribe();
-                        },
-                        () -> {
-                            log.warn("❌ [STT-HANDLER] No conference info found for clientId={}", clientId);
-                        }
-                    );
+                sessionService.getConferenceInfo(conferenceId)
+                    .flatMap(info -> ideaService.processText(info.getConferenceId(), info.getConferenceName(), info.getEventId(), text)).subscribe();
                 
             } else {
                 log.debug("Unknown STT message type: {}", type);

@@ -31,7 +31,7 @@ public class BotService {
         
         public Mono<Void> disconnectBot(final String conferenceId) {
             log.info("🤖 [BOT-SERVICE] Disconnecting bot for conferenceId={}", conferenceId);
-            final String botId = sessionService.getBotForClient(conferenceId);
+            final String botId = sessionService.getBotForConference(conferenceId);
             if (botId == null) {
                 log.warn("❌ [BOT-SERVICE] No bot linked to conferenceId={}, cannot disconnect", conferenceId);
                 return Mono.empty();
@@ -58,25 +58,24 @@ public class BotService {
         }
 
         public Mono<Void> handleBotStarted(final WebSocketSession session, final String botId) {
-            String conferenceId = sessionService.getClientForBot(botId);
-    
-            if (conferenceId == null) {
+            String conferenceId = sessionService.getConferenceForBot(botId);
+            String eventId = sessionService.getConferenceInfo(conferenceId).block().getEventId();
+
+            if (conferenceId == null || eventId == null) {
                 return Mono.empty();
             }
             
-            return sessionService.getClientSession(conferenceId).flatMap(cs -> {
-                return sessionService.registerBot(botId, session)
-                    .then(audioDumpService.start(cs.getSession().getId(), conferenceId, cs.getEventId())
-                );
-            }).then(clientNotificationService.botConnected(conferenceId, botId))
+            return sessionService.registerBot(botId, session)
+            .then(audioDumpService.start(conferenceId, eventId))
+            .then(clientNotificationService.botConnected(conferenceId, botId))
             .then(clientNotificationService.sendMicSwitchNotification(conferenceId, false));
         }
 
         public Mono<Void> handleBotRemoved(final String botId) {
-            String conferenceId = sessionService.getClientForBot(botId);
+            String conferenceId = sessionService.getConferenceForBot(botId);
 
-            return sessionService.getClientSession(conferenceId).flatMap(cs -> {
-                return audioDumpService.stop(cs.getSession().getId())
+            return sessionService.getConferenceInfo(conferenceId).flatMap(cs -> {
+                return audioDumpService.stop(cs.getConferenceId())
                 .then(clientNotificationService.sendMicSwitchNotification(conferenceId, true))
                 .then(sessionService.unregisterBot(botId))
                 .then(clientNotificationService.botDisconnected(conferenceId, botId));
@@ -88,7 +87,7 @@ public class BotService {
         }
 
         public Mono<Void> switchMic(final String conferenceId) {
-            String botId = sessionService.getBotForClient(conferenceId);
+            String botId = sessionService.getBotForConference(conferenceId);
             if (botId == null) {
                 log.warn("❌ [BOT-SERVICE] No bot linked to conferenceId={}, cannot switch mic", conferenceId);
                 return clientNotificationService.sendMicSwitchNotification(conferenceId, true);
@@ -105,12 +104,12 @@ public class BotService {
                 throw new BadRequestException("Unsupported platform in meeting URL");
             }
 
-            String existingBotId = sessionService.getBotForClient(request.getConferenceId());
+            String existingBotId = sessionService.getBotForConference(request.getConferenceId());
             if (existingBotId != null) {
-                throw new UnprocessableEntityException("Bot is already active or connecting to this conference");
+                return CreateBotResponse.builder().build();
             }
 
-            if (sessionService.getClientSession(request.getConferenceId()).block() == null) {
+            if (sessionService.getParticipantsCountForConference(request.getConferenceId()) == 0) {
                 throw new UnprocessableEntityException("No active client session for the given conference ID");
             }
 
@@ -121,12 +120,12 @@ public class BotService {
                 log.info("🤖 [BOT-SERVICE] Creating bot: conferenceId={}, eventId={}, botId={}",
                                 request.getConferenceId(), meetingUrl, botId);
 
-                sessionService.linkClientAndBot(request.getConferenceId(), botId);
+                sessionService.linkConferenceAndBot(request.getConferenceId(), botId);
 
                 // Запускаем таймер на очистку, если бот не подключится
                 Mono.delay(Duration.ofSeconds(60))
                     .subscribe(v -> {
-                        String currentBotId = sessionService.getBotForClient(request.getConferenceId());
+                        String currentBotId = sessionService.getBotForConference(request.getConferenceId());
                         if (botId.equals(currentBotId) && sessionService.getBotSession(botId) == null) {
                             log.warn("⏰ [BOT-SERVICE] Bot connection timeout: botId={}. Cleaning up session link.", botId);
                             sessionService.unlinkBot(botId);

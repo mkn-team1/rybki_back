@@ -100,10 +100,22 @@ public class ClientWebSocketHandler implements WebSocketHandler {
                         clientId, conferenceId, session.getId(), signalType);
                 // Удаляем из реестра при отключении
                 clientRegistryService.unregisterClient(clientId);
-                botService.disconnectBot(conferenceId)
+
+                int participantsCount = sessionService.getParticipantsCountForConference(conferenceId);
+                Mono<Void> botDisconnectMono = Mono.empty();
+
+                if (participantsCount <= 1) {
+                    botDisconnectMono = botService.disconnectBot(conferenceId)
+                            .onErrorResume(e -> {
+                                log.warn("Failed to disconnect bot: {}", e.getMessage());
+                                return Mono.empty();
+                            });
+                }
+
+                botDisconnectMono
                     .then(sessionService.unregisterClient(session))
-                    .then(clientNotificationService.broadcastParticipantsCount(conferenceId,
-                            sessionService.getParticipantsCountForConference(conferenceId)))
+                    .then(Mono.defer(() -> clientNotificationService.broadcastParticipantsCount(conferenceId,
+                            sessionService.getParticipantsCountForConference(conferenceId))))
                     .doOnSuccess(v -> log.info(
                         "Client disconnected: clientId={}, conferenceId={}, sessionId={}",
                         clientId, conferenceId, session.getId()
