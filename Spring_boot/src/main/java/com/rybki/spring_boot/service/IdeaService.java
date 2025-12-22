@@ -2,6 +2,7 @@ package com.rybki.spring_boot.service;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class IdeaService {
     private final IdeaExtractorClient ideaExtractorClient;
     private final ClientNotificationService clientNotificationService;
     private final RedisIdeaRepository ideaRepository;
+    private final SessionService sessionService;
 
     public Mono<Void> processText(String conferenceId, String conferenceName, String eventId, String text) {
         log.info("💡 [IDEA-SERVICE] Starting idea extraction: conferenceId={}, eventId={}, textLength={} chars",
@@ -59,7 +61,7 @@ public class IdeaService {
                 .conferenceName(safeName)
                 .title(idea.title())
                 .description(idea.description())
-                .status(IdeaStatus.PENDING)
+                .status(IdeaStatus.LOCAL)
                 .createdAt(Instant.now().toString())
                 .author(safeName)
                 .likes(0)
@@ -71,14 +73,16 @@ public class IdeaService {
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(redisIdea))
-                .then(clientNotificationService.broadcastIdea(conferenceId, eventId, redisIdea))
-                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created: ideaId={}, title={}", redisIdea.getIdeaId(),
-                        redisIdea.getTitle()));
+                .then(clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, redisIdea))
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created and broadcast to conference: ideaId={}, title={}, conferenceId={}", 
+                        redisIdea.getIdeaId(), redisIdea.getTitle(), conferenceId));
     }
 
     public Mono<Void> createIdeaFromFront(final String conferenceId, final String conferenceName,
             final String eventId, final String title, final String description) {
         final String safeName = conferenceName != null && !conferenceName.isEmpty() ? conferenceName : "Anonymous";
+        log.info("🔍 [IDEA-SERVICE] createIdeaFromFront called: conferenceId={}, conferenceName={}, safeName={}, eventId={}, title={}",
+                conferenceId, conferenceName, safeName, eventId, title);
         final com.rybki.spring_boot.model.domain.redis.Idea idea = com.rybki.spring_boot.model.domain.redis.Idea
                 .builder()
                 .ideaId(UUID.randomUUID().toString())
@@ -87,7 +91,7 @@ public class IdeaService {
                 .conferenceName(safeName)
                 .title(title)
                 .description(description)
-                .status(IdeaStatus.PENDING)
+                .status(IdeaStatus.LOCAL)
                 .createdAt(Instant.now().toString())
                 .author(safeName)
                 .likes(0)
@@ -97,8 +101,9 @@ public class IdeaService {
                 .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
-                .then(clientNotificationService.sendIdeaToClient(conferenceId, idea))
-                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front: ideaId={}", idea.getIdeaId()));
+                .then(clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, idea))
+                .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea created from front and broadcast to conference: ideaId={}, conferenceId={}, conferenceName={}", 
+                        idea.getIdeaId(), conferenceId, idea.getConferenceName()));
     }
 
     public Mono<Void> deleteIdea(String conferenceId, String eventId, String ideaId) {
@@ -106,7 +111,7 @@ public class IdeaService {
         return clientNotificationService.broadcastIdeaDeleted(conferenceId, eventId, ideaId);
     }
 
-    public Mono<Void> reactToIdea(String conferenceId, String eventId, String ideaId, String reaction) {
+    public Mono<Void> reactToIdea(String conferenceId, String eventId, String ideaId, String reaction, String clientId) {
         return Mono.fromCallable(() -> ideaRepository.findIdeaById(ideaId))
                 .flatMap(ideaOpt -> {
                     if (ideaOpt.isEmpty()) {
@@ -116,31 +121,96 @@ public class IdeaService {
                     if ("accept".equals(reaction)) {
                         return handleAcceptReaction(conferenceId, eventId, ideaId, r);
                     } else {
-                        return handleLikeDislikeReaction(conferenceId, eventId, ideaId, reaction, r);
+                        return handleLikeDislikeReaction(conferenceId, eventId, ideaId, reaction, clientId, r);
                     }
                 });
     }
 
     private Mono<Void> handleAcceptReaction(String conferenceId, String eventId, String ideaId,
             com.rybki.spring_boot.model.domain.redis.Idea idea) {
-        idea.setStatus(IdeaStatus.ACCEPTED);
+        idea.setStatus(IdeaStatus.GOLDEN);
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
                 .then(clientNotificationService.broadcastIdea(conferenceId, eventId, idea))
+                .then(clientNotificationService.broadcastIdeaStatusChanged(eventId, conferenceId, ideaId, "golden"))
                 .doOnSuccess(v -> log.info("✅ [IDEA-SERVICE] Idea accepted and broadcast: ideaId={}", ideaId));
     }
 
     private Mono<Void> handleLikeDislikeReaction(String conferenceId, String eventId, String ideaId,
-            String reaction, com.rybki.spring_boot.model.domain.redis.Idea idea) {
-        if ("like".equals(reaction)) {
-            idea.setLikes(idea.getLikes() != null ? idea.getLikes() + 1 : 1);
-        } else if ("dislike".equals(reaction)) {
-            idea.setDislikes(idea.getDislikes() != null ? idea.getDislikes() + 1 : 1);
+            String reaction, String clientId, com.rybki.spring_boot.model.domain.redis.Idea idea) {
+        // Определяем, голосует ли клиент за свою LOCAL идею или за чужую GLOBAL/GOLDEN
+        final boolean isOwnIdea = idea.getConferenceId().equals(conferenceId);
+        final boolean isGlobalOrGoldenIdea = idea.getStatus() == IdeaStatus.GLOBAL || idea.getStatus() == IdeaStatus.GOLDEN;
+        
+        if (!isOwnIdea && !isGlobalOrGoldenIdea) {
+            log.warn("⚠️ [IDEA-SERVICE] Cannot vote for LOCAL idea from another conference: ideaId={}, clientConferenceId={}, ideaConferenceId={}",
+                    ideaId, conferenceId, idea.getConferenceId());
+            return Mono.empty();
         }
-        ideaRepository.saveIdea(idea);
-        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, likes={}, dislikes={}",
-                ideaId, reaction, idea.getLikes(), idea.getDislikes());
-        return clientNotificationService.broadcastIdeaReaction(conferenceId, eventId, ideaId,
-                reaction, idea.getLikes(), idea.getDislikes());
+        
+        if ("like".equals(reaction)) {
+            handleLikeVote(idea, clientId);
+        } else if ("dislike".equals(reaction)) {
+            handleDislikeVote(idea, clientId);
+        }
+        
+        // Получаем актуальные значения из sets
+        final int likes = idea.getLikesClientsSet().size();
+        final int dislikes = idea.getDislikesClientsSet().size();
+        
+        log.info("✅ [IDEA-SERVICE] Reaction added: ideaId={}, reaction={}, clientId={}, likes={}, dislikes={}, ideaStatus={}",
+                ideaId, reaction, clientId, likes, dislikes, idea.getStatus());
+        
+        // Сохраняем идею в Redis после обновления голоса
+        Mono<Void> saveMono = Mono.fromRunnable(() -> ideaRepository.saveIdea(idea));
+        
+        // Для GLOBAL и GOLDEN идей рассылаем реакцию всему Event, для LOCAL - только конференции
+        final Mono<Void> broadcastReaction;
+        if (isGlobalOrGoldenIdea) {
+            // Рассылаем всему Event
+            broadcastReaction = clientNotificationService.broadcastIdeaReactionToEvent(eventId, ideaId, likes, dislikes);
+        } else {
+            // Рассылаем только своей конференции
+            broadcastReaction = clientNotificationService.broadcastIdeaReaction(conferenceId, ideaId, likes, dislikes);
+        }
+        
+        // Проверяем условие promotion: likes > 50% от количества людей в конференции (только для LOCAL идей)
+        if (!isGlobalOrGoldenIdea) {
+            final int participantsCount = sessionService.getParticipantsCountForConference(idea.getConferenceId());
+            final boolean shouldPromoteToGlobal = likes > participantsCount / 2.0 
+                    && idea.getPromotedToGlobalAt() == null;
+            
+            if (shouldPromoteToGlobal) {
+                idea.setPromotedToGlobalAt(Instant.now().toString());
+                idea.setStatus(IdeaStatus.GLOBAL);
+                log.info("🚀 [IDEA-SERVICE] Idea promoted to GLOBAL: ideaId={}, likes={}, participants={}", 
+                        ideaId, likes, participantsCount);
+                
+                // Сохраняем идею после промоции и отправляем всем конференциям в Event (кроме исходной)
+                return saveMono
+                        .then(broadcastReaction)
+                        .then(Mono.fromRunnable(() -> ideaRepository.saveIdea(idea)))
+                        .then(clientNotificationService.broadcastIdea(idea.getConferenceId(), eventId, idea))
+                        .then(clientNotificationService.broadcastIdeaStatusChanged(eventId, idea.getConferenceId(), ideaId, "global"));
+            }
+        }
+        
+        return saveMono.then(broadcastReaction);
+    }
+
+    private void handleLikeVote(com.rybki.spring_boot.model.domain.redis.Idea idea, String clientId) {
+        if (!idea.getLikesClientsSet().contains(clientId)) {
+            idea.getLikesClientsSet().add(clientId);
+            // Если был dislike, удаляем его
+            idea.getDislikesClientsSet().remove(clientId);
+        }
+    }
+
+    private void handleDislikeVote(com.rybki.spring_boot.model.domain.redis.Idea idea, String clientId) {
+        if (!idea.getDislikesClientsSet().contains(clientId)) {
+            idea.getDislikesClientsSet().add(clientId);
+            // Если был like, удаляем его
+            idea.getLikesClientsSet().remove(clientId);
+        }
     }
 
     public Mono<List<com.rybki.spring_boot.model.domain.redis.Idea>> getIdeasForEvent(String eventId) {
@@ -152,5 +222,36 @@ public class IdeaService {
                     .map(java.util.Optional::get)
                     .toList();
         });
+    }
+
+    /**
+     * Отправить все существующие идеи новому подключившемуся клиенту:
+     * - LOCAL идеи своей конференции
+     * - Все GLOBAL и GOLDEN идеи из Event
+     */
+    public Mono<Void> sendExistingIdeasToClient(String conferenceId, String eventId) {
+        return Mono.fromCallable(() -> {
+            final Set<String> localIdeaIds = ideaRepository.getLocalIdeasForConference(eventId, conferenceId);
+            final Set<String> globalAndGoldenIds = ideaRepository.getGlobalAndGoldenIdeas(eventId);
+            
+            // Объединяем LOCAL идеи конференции с GLOBAL/GOLDEN идеями Event
+            final Set<String> allIdeaIds = new java.util.HashSet<>(localIdeaIds);
+            allIdeaIds.addAll(globalAndGoldenIds);
+            
+            if (allIdeaIds.isEmpty()) {
+                log.debug("📭 [IDEA-SERVICE] No existing ideas for conferenceId={}", conferenceId);
+                return List.<com.rybki.spring_boot.model.domain.redis.Idea>of();
+            }
+            log.info("📬 [IDEA-SERVICE] Sending {} existing ideas to conferenceId={} (LOCAL={}, GLOBAL/GOLDEN={})", 
+                    allIdeaIds.size(), conferenceId, localIdeaIds.size(), globalAndGoldenIds.size());
+            return allIdeaIds.stream()
+                    .map(ideaRepository::findIdeaById)
+                    .filter(java.util.Optional::isPresent)
+                    .map(java.util.Optional::get)
+                    .toList();
+        })
+        .flatMapMany(reactor.core.publisher.Flux::fromIterable)
+        .flatMap(idea -> clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, idea))
+        .then();
     }
 }
