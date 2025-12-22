@@ -22,6 +22,7 @@ import com.rybki.spring_boot.repository.RedisEventRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.Mono;
 
 @Service
 @Slf4j
@@ -157,16 +158,20 @@ public class EventService {
     //     return LeaveEventResponse.builder().build();
     // }
 
-    public SummarizeEventResponse summarizeEvent(final String eventId,
+    public Mono<SummarizeEventResponse> summarizeEvent(final String eventId,
             final SummarizeEventRequest summarizeEventRequest) {
-        log.info("Summarizing event: eventId={}", eventId);
+        log.info("📋 Summarizing event: eventId={}", eventId);
 
-        final Event event = eventRepository.findEventById(eventId)
-                .orElseThrow(() -> new NotFoundException("Event not found with id: " + eventId));
-
-        // TODO: Собрать и вернуть сводку события
-
-        return SummarizeEventResponse.builder().build();
-
+        return summaryService.generateSummary(
+                eventId,
+                summarizeEventRequest.getMode(),
+                summarizeEventRequest.getStyle()
+        )
+        .map(summary -> SummarizeEventResponse.builder()
+                .summaryText(summary)
+                .build()
+        )
+        .doOnSuccess(r -> log.info("✅ Summary prepared for eventId={}", eventId))
+        .doOnError(e -> log.error("❌ Failed to generate summary for eventId={}", eventId, e));
     }
 }

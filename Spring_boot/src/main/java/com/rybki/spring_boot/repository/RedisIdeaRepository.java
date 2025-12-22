@@ -87,18 +87,31 @@ public class RedisIdeaRepository {
     }
 
     public void moveIdeaToRejected(final String ideaId, final String eventId) {
+        moveIdeaToStatus(ideaId, eventId, IdeaStatus.REJECTED);
+    }
+
+    private void moveIdeaToStatus(
+        final String ideaId,
+        final String eventId,
+        final IdeaStatus status
+    ) {
         final Idea idea = findIdeaById(ideaId).orElseThrow();
         idea.setStatus(IdeaStatus.LOCAL);
 
         final String ideaKey = RedisKeys.ideaKey(ideaId);
         redisTemplate.opsForValue().set(ideaKey, idea);
 
-        // Перемещаем между sets
         final String pendingKey = RedisKeys.eventPendingIdeasKey(eventId);
-        final String acceptedKey = RedisKeys.eventRejectedIdeasKey(eventId);
 
         redisTemplate.opsForSet().remove(pendingKey, ideaId);
-        redisTemplate.opsForSet().add(acceptedKey, ideaId);
+
+        String targetKey = switch (status) {
+            case ACCEPTED -> RedisKeys.eventAcceptedIdeasKey(eventId);
+            case REJECTED -> RedisKeys.eventRejectedIdeasKey(eventId);
+            default -> throw new IllegalStateException("Unsupported status: " + status);
+        };
+
+        redisTemplate.opsForSet().add(targetKey, ideaId);
     }
 
     public Set<String> getPendingIdeas(final String eventId) {
