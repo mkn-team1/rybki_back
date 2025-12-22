@@ -31,6 +31,7 @@ public class EventService {
 
     private final RedisEventRepository eventRepository;
     private final RedisClientRepository redisClientRepository;
+    private final SummaryService summaryService;
 
     public CreateEventResponse createEvent(final CreateEventRequest eventRequest) {
         final String conferenceId = UUID.randomUUID().toString();
