@@ -95,14 +95,14 @@ public class EventController {
         final SummarizeEventResponse response = eventService.summarizeEvent(eventId, summarizeEventRequest);
         return ResponseEntity.ok(response);
     }*/    
-
-    /*@ApiResponse(responseCode = "200", description = "Event summary retrieved")
+   
+   // Получить сводку события
+    @PostMapping("/{eventId}/summary")
+    @Operation(summary = "Summarize Event", description = "Get Event Summary")
+    @ApiResponse(responseCode = "200", description = "Event summary retrieved")
     @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
     @ApiResponse(responseCode = "404", description = "Event not found")
-    @ApiResponse(responseCode = "500", description = "Internal Server Error")*/
-    // Получить сводку события
-    @GetMapping("/{eventId}/summary")
-    @Operation(summary = "Summarize Event", description = "Get Event Summary")
+    @ApiResponse(responseCode = "500", description = "Internal Server Error")
     public Mono<ResponseEntity<SummarizeEventResponse>> summarizeEvent(
             final @PathVariable String eventId,
             final @RequestBody @Valid SummarizeEventRequest summarizeEventRequest) {
