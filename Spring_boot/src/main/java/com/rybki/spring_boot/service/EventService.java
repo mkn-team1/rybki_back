@@ -32,6 +32,7 @@ public class EventService {
     private final RedisEventRepository eventRepository;
     private final RedisClientRepository redisClientRepository;
     private final SummaryService summaryService;
+    private final SessionService sessionService;
 
     public CreateEventResponse createEvent(final CreateEventRequest eventRequest) {
         final String conferenceId = UUID.randomUUID().toString();
@@ -174,5 +175,28 @@ public class EventService {
         )
         .doOnSuccess(r -> log.info("✅ Summary prepared for eventId={}", eventId))
         .doOnError(e -> log.error("❌ Failed to generate summary for eventId={}", eventId, e));
+    }
+
+    public Mono<SummarizeEventResponse> summarizeEventByConference(final String conferenceId,
+            final SummarizeEventRequest summarizeEventRequest) {
+        log.info("📋 Summarizing event by conferenceId={}", conferenceId);
+
+        return sessionService.getConferenceInfo(conferenceId)
+                .switchIfEmpty(Mono.error(new NotFoundException("Conference not found: " + conferenceId)))
+                .flatMap(conferenceInfo -> {
+                    final String eventId = conferenceInfo.getEventId();
+                    log.info("📋 Found eventId={} for conferenceId={}", eventId, conferenceId);
+                    return summaryService.generateSummary(
+                            eventId,
+                            summarizeEventRequest.getMode(),
+                            summarizeEventRequest.getStyle()
+                    );
+                })
+                .map(summary -> SummarizeEventResponse.builder()
+                        .summaryText(summary)
+                        .build()
+                )
+                .doOnSuccess(r -> log.info("✅ Summary prepared for conferenceId={}", conferenceId))
+                .doOnError(e -> log.error("❌ Failed to generate summary for conferenceId={}", conferenceId, e));
     }
 }

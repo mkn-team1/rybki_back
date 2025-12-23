@@ -2,6 +2,7 @@ package com.rybki.spring_boot.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -11,6 +12,7 @@ import com.rybki.spring_boot.llm.contract.LlmClient;
 import com.rybki.spring_boot.llm.contract.LlmRequest;
 import com.rybki.spring_boot.llm.contract.LlmResponse;
 import com.rybki.spring_boot.model.domain.redis.Idea;
+import com.rybki.spring_boot.model.domain.redis.IdeaStatus;
 import com.rybki.spring_boot.repository.RedisIdeaRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -39,31 +41,35 @@ public class SummaryService {
 
         // 1. Получаем идеи реактивно и сортируем по времени создания
         Mono<List<Idea>> ideasMono = Mono.fromCallable(() -> {
-            Stream<Idea> ideaStream;
+            // Берем все id из pending, accepted и rejected
+            Set<String> pendingIds = ideaRepository.getPendingIdeas(eventId);
+            Set<String> acceptedIds = ideaRepository.getAcceptedIdeas(eventId);
+            Set<String> rejectedIds = ideaRepository.getRejectedIdeas(eventId);
 
-            switch (mode) {
-                case "accepted_only" -> ideaStream = ideaRepository.getAcceptedIdeas(eventId).stream()
-                        .map(ideaRepository::findIdeaById)
-                        .filter(Optional::isPresent)
-                        .map(Optional::get)
-                        .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
-                case "all" -> {
-                    Stream<Idea> pending = ideaRepository.getPendingIdeas(eventId).stream()
-                            .map(ideaRepository::findIdeaById)
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
-                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
-                    Stream<Idea> accepted = ideaRepository.getAcceptedIdeas(eventId).stream()
-                            .map(ideaRepository::findIdeaById)
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
-                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
-                    ideaStream = Stream.concat(pending, accepted);
-                }
-                default -> throw new IllegalArgumentException("Unsupported mode: " + mode);
+            log.info("📋 [SUMMARY] Redis sets for eventId={}: pending={}, accepted={}, rejected={}", 
+                    eventId, pendingIds.size(), acceptedIds.size(), rejectedIds.size());
+            log.info("📋 [SUMMARY] Pending IDs: {}", pendingIds);
+            log.info("📋 [SUMMARY] Accepted IDs: {}", acceptedIds);
+            log.info("📋 [SUMMARY] Rejected IDs: {}", rejectedIds);
+
+            Stream<Idea> ideaStream = Stream.of(pendingIds, acceptedIds, rejectedIds)
+                .flatMap(Set::stream)
+                .distinct()
+                .map(ideaRepository::findIdeaById)
+                .filter(Optional::isPresent)
+                .map(Optional::get);
+
+            // accepted_only: оставляем только GLOBAL/GOLDEN (принятые/продвинутые идеи)
+            if ("accepted_only".equals(mode)) {
+                ideaStream = ideaStream
+                        .filter(i -> i.getStatus() == IdeaStatus.GOLDEN || i.getStatus() == IdeaStatus.GLOBAL);
+            } else if (!"all".equals(mode)) {
+                throw new IllegalArgumentException("Unsupported mode: " + mode);
             }
 
-            return ideaStream.collect(Collectors.toList());
+            return ideaStream
+                .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
+                .collect(Collectors.toList());
         });
 
         // 2. Проверяем идеи и формируем prompt
