@@ -1,5 +1,12 @@
 package com.rybki.spring_boot.controller;
 
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import com.rybki.spring_boot.model.domain.api.event.create.CreateEventRequest;
 import com.rybki.spring_boot.model.domain.api.event.create.CreateEventResponse;
 import com.rybki.spring_boot.model.domain.api.event.end.EndEventRequest;
@@ -9,20 +16,13 @@ import com.rybki.spring_boot.model.domain.api.event.join.JoinEventResponse;
 import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventRequest;
 import com.rybki.spring_boot.model.domain.api.event.summarize.SummarizeEventResponse;
 import com.rybki.spring_boot.service.EventService;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Mono;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.bind.annotation.GetMapping;
 
 
 @RestController
@@ -97,17 +97,17 @@ public class EventController {
     }*/    
    
    // Получить сводку события
-    @PostMapping("/{eventId}/summary")
-    @Operation(summary = "Summarize Event", description = "Get Event Summary")
+    @PostMapping("/{conferenceId}/summary")
+    @Operation(summary = "Summarize Event", description = "Get Event Summary by Conference ID")
     @ApiResponse(responseCode = "200", description = "Event summary retrieved")
     @ApiResponse(responseCode = "400", description = "Bad Request - validation error")
-    @ApiResponse(responseCode = "404", description = "Event not found")
+    @ApiResponse(responseCode = "404", description = "Conference or Event not found")
     @ApiResponse(responseCode = "500", description = "Internal Server Error")
-    public Mono<ResponseEntity<SummarizeEventResponse>> summarizeEvent(
-            final @PathVariable String eventId,
+    public Mono<ResponseEntity<SummarizeEventResponse>> summarizeEventByConference(
+            final @PathVariable String conferenceId,
             final @RequestBody @Valid SummarizeEventRequest summarizeEventRequest) {
 
-        return eventService.summarizeEvent(eventId, summarizeEventRequest)
+        return eventService.summarizeEventByConference(conferenceId, summarizeEventRequest)
                 .map(summary -> ResponseEntity.ok(summary));
     }
 }

@@ -2,6 +2,7 @@ package com.rybki.spring_boot.service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -11,6 +12,7 @@ import com.rybki.spring_boot.llm.contract.LlmClient;
 import com.rybki.spring_boot.llm.contract.LlmRequest;
 import com.rybki.spring_boot.llm.contract.LlmResponse;
 import com.rybki.spring_boot.model.domain.redis.Idea;
+import com.rybki.spring_boot.model.domain.redis.IdeaStatus;
 import com.rybki.spring_boot.repository.RedisIdeaRepository;
 
 import lombok.RequiredArgsConstructor;
@@ -39,31 +41,35 @@ public class SummaryService {
 
         // 1. Получаем идеи реактивно и сортируем по времени создания
         Mono<List<Idea>> ideasMono = Mono.fromCallable(() -> {
-            Stream<Idea> ideaStream;
+            // Берем все id из pending, accepted и rejected
+            Set<String> pendingIds = ideaRepository.getPendingIdeas(eventId);
+            Set<String> acceptedIds = ideaRepository.getAcceptedIdeas(eventId);
+            Set<String> rejectedIds = ideaRepository.getRejectedIdeas(eventId);
 
-            switch (mode) {
-                case "accepted_only" -> ideaStream = ideaRepository.getAcceptedIdeas(eventId).stream()
-                        .map(ideaRepository::findIdeaById)
-                        .filter(Optional::isPresent)
-                        .map(Optional::get)
-                        .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
-                case "all" -> {
-                    Stream<Idea> pending = ideaRepository.getPendingIdeas(eventId).stream()
-                            .map(ideaRepository::findIdeaById)
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
-                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
-                    Stream<Idea> accepted = ideaRepository.getAcceptedIdeas(eventId).stream()
-                            .map(ideaRepository::findIdeaById)
-                            .filter(Optional::isPresent)
-                            .map(Optional::get)
-                            .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
-                    ideaStream = Stream.concat(pending, accepted);
-                }
-                default -> throw new IllegalArgumentException("Unsupported mode: " + mode);
+            log.info("📋 [SUMMARY] Redis sets for eventId={}: pending={}, accepted={}, rejected={}", 
+                    eventId, pendingIds.size(), acceptedIds.size(), rejectedIds.size());
+            log.info("📋 [SUMMARY] Pending IDs: {}", pendingIds);
+            log.info("📋 [SUMMARY] Accepted IDs: {}", acceptedIds);
+            log.info("📋 [SUMMARY] Rejected IDs: {}", rejectedIds);
+
+            Stream<Idea> ideaStream = Stream.of(pendingIds, acceptedIds, rejectedIds)
+                .flatMap(Set::stream)
+                .distinct()
+                .map(ideaRepository::findIdeaById)
+                .filter(Optional::isPresent)
+                .map(Optional::get);
+
+            // accepted_only: оставляем только GLOBAL/GOLDEN (принятые/продвинутые идеи)
+            if ("accepted_only".equals(mode)) {
+                ideaStream = ideaStream
+                        .filter(i -> i.getStatus() == IdeaStatus.GOLDEN || i.getStatus() == IdeaStatus.GLOBAL);
+            } else if (!"all".equals(mode)) {
+                throw new IllegalArgumentException("Unsupported mode: " + mode);
             }
 
-            return ideaStream.collect(Collectors.toList());
+            return ideaStream
+                .sorted((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()))
+                .collect(Collectors.toList());
         });
 
         // 2. Проверяем идеи и формируем prompt
@@ -78,8 +84,28 @@ public class SummaryService {
                     .collect(Collectors.joining("\n"));
 
             String prompt = String.format(
-                    "You are a professional conference summarizer. Please create a %s summary of the following ideas:\n%s",
-                    style != null ? style : "detailed", inputText
+                """
+                Ты — профессиональный аналитик и модератор конференций.
+                Твоя задача — подготовить %s итоговое резюме обсуждения на основе идей участников.
+
+                Требования к резюме:
+                - Пиши на русском языке
+                - Используй нейтральный, профессиональный тон
+                - Не перечисляй идеи дословно, а обобщай и структурируй их
+                - Выделяй ключевые темы, направления и выводы
+                - Избегай воды и повторов
+                - Итог должен быть понятен человеку, который не видел исходный список идей
+
+                Формат ответа:
+                - Краткое вступление (1–2 предложения)
+                - Основные темы или выводы (абзацами или маркированным списком)
+                - Краткое заключение (если уместно)
+
+                Ниже приведён список идей участников:
+                %s
+                """,
+                style != null ? style : "развёрнутое",
+                inputText
             );
 
             // 3. Формируем LLM request через фабрику
