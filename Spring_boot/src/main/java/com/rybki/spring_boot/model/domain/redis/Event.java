@@ -15,7 +15,8 @@ import lombok.NoArgsConstructor;
 public class Event {
 
     private String eventId;
-    private String creatorClientId;
+    private String eventName;
+    private String creatorConferenceId;
     private EventStatus status; // ACTIVE, ENDED
     private Instant createdAt;
     private Instant endedAt;

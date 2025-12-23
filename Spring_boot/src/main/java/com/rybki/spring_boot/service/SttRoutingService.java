@@ -24,27 +24,27 @@ public class SttRoutingService {
     /**
      * Пересылаем PCM16 байты на STT (реактивно)
      */
-    public Mono<Void> forwardAudio(final String clientId, final String eventId, final byte[] pcmChunk) {
+    public Mono<Void> forwardAudio(final String conferenceId, final String eventId, final byte[] pcmChunk) {
         return Mono.fromRunnable(() -> {
             try {
                 final String audioBase64 = Base64Util.encode(pcmChunk);
 
                 final Map<String, Object> payload = new HashMap<>();
                 payload.put("type", "audio");
-                payload.put("clientId", clientId);
+                payload.put("conferenceId", conferenceId);
                 payload.put("eventId", eventId);
                 payload.put("audio", audioBase64);
 
                 final String json = objectMapper.writeValueAsString(payload);
                 sttClient.sendToStt(json);
 
-                log.debug("📤 Forwarded audio to STT: clientId={}, eventId={}, size={} bytes",
-                    clientId, eventId, pcmChunk.length);
+                log.debug("📤 Forwarded audio to STT: conferenceId={}, eventId={}, size={} bytes",
+                    conferenceId, eventId, pcmChunk.length);
 
             } catch (JsonProcessingException e) {
-                log.error("❌ [STT-ROUTING] Failed to serialize audio JSON: clientId={}, eventId={}", clientId, eventId, e);
+                log.error("❌ [STT-ROUTING] Failed to serialize audio JSON: conferenceId={}, eventId={}", conferenceId, eventId, e);
             } catch (Exception e) {
-                log.error("❌ [STT-ROUTING] Failed to forward audio to STT: clientId={}, eventId={}", clientId, eventId, e);
+                log.error("❌ [STT-ROUTING] Failed to forward audio to STT: conferenceId={}, eventId={}", conferenceId, eventId, e);
             }
         }).subscribeOn(Schedulers.boundedElastic()).then();
     }
@@ -52,23 +52,23 @@ public class SttRoutingService {
     /**
      * Отправка события окончания аудио (реактивно)
      */
-    public Mono<Void> notifyEnd(final String clientId, final String eventId) {
+    public Mono<Void> notifyEnd(final String conferenceId, final String eventId) {
         return Mono.fromRunnable(() -> {
             try {
                 final Map<String, Object> payload = new HashMap<>();
                 payload.put("type", "disconnect");
-                payload.put("clientId", clientId);
+                payload.put("conferenceId", conferenceId);
                 payload.put("eventId", eventId);
 
                 final String json = objectMapper.writeValueAsString(payload);
                 sttClient.sendToStt(json);
 
-                log.info("📤 Sent disconnect to STT for clientId={}, eventId={}", clientId, eventId);
+                log.info("📤 Sent disconnect to STT for conferenceId={}, eventId={}", conferenceId, eventId);
 
             } catch (JsonProcessingException e) {
-                log.error("Failed to serialize disconnect JSON: clientId={}, eventId={}", clientId, eventId, e);
+                log.error("Failed to serialize disconnect JSON: conferenceId={}, eventId={}", conferenceId, eventId, e);
             } catch (Exception e) {
-                log.error("Failed to notify STT about disconnect: clientId={}, eventId={}", clientId, eventId, e);
+                log.error("Failed to notify STT about disconnect: conferenceId={}, eventId={}", conferenceId, eventId, e);
             }
         }).subscribeOn(Schedulers.boundedElastic()).then();
     }

@@ -1,0 +1,18 @@
+server:
+  # Основной порт делаем защищенным (для WSS)
+  port: 8443
+  ssl:
+    enabled: true
+    key-store-type: PKCS12
+    key-store: file:/app/keystore.p12
+    key-store-password: password
+    key-alias: springboot
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
+    bot-tasks-topic: ${KAFKA_BOT_TASKS_TOPIC:meeting-bot-tasks}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all

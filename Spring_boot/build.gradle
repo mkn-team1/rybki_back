@@ -46,7 +46,7 @@ dependencies {
     implementation 'io.micrometer:micrometer-registry-prometheus'  // Для интеграции с Prometheus
 
     // OpenAPI / Swagger UI для документации
-    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.6.0'
+    implementation 'org.springdoc:springdoc-openapi-starter-webflux-ui:2.8.13'
     // Генерация документации для WebFlux
 
     // Lombok
@@ -64,6 +64,10 @@ dependencies {
     //Jackson
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.17.2'
     compileOnly 'org.jetbrains:annotations:24.1.0'
+    
+    // Kafka для реактивной работы
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'io.projectreactor.kafka:reactor-kafka:1.3.23'
 }
 
 test {

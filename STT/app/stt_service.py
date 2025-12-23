@@ -6,19 +6,15 @@ from typing import Optional
 from fastapi import WebSocket, WebSocketDisconnect
 from app.audio_buffer import AudioBufferManager
 from app.aggregator import TextAggregator
-from app.vad import SileroVAD
-from app.vosk_model import VoskManager
 from app.whisper_model import WhisperManager
-from config import MODEL
 
 logger = logging.getLogger(__name__)
 
 
 class STTService:
     def __init__(self):
-        self.vad = SileroVAD()
-        self.model = WhisperManager() if MODEL == "Whisper" else VoskManager()
-        self.sessions = {}  # key: (clientId, eventId)
+        self.model = WhisperManager()
+        self.sessions = {}  # key: (conferenceId, eventId)
         self.backend_ws: Optional[WebSocket] = None
         self._lock = asyncio.Lock()
 
@@ -49,7 +45,7 @@ class STTService:
     async def listen_loop(self, websocket: WebSocket):
         '''
         message = {
-            "clientId": "...",
+            "conferenceId": "...",
             "eventId": "...",
             "audio": "<base64 PCM16 chunk>"
         }
@@ -59,14 +55,14 @@ class STTService:
                 message = await websocket.receive_text()
                 data = json.loads(message)
                 msg_type = data.get("type", "audio")
-                client_id = data.get("clientId")
+                conferenceId = data.get("conferenceId")
                 event_id = data.get("eventId")
 
-                if not (client_id and event_id):
-                    logger.warning("Received message without clientId/eventId: %s", data)
+                if not (conferenceId and event_id):
+                    logger.warning("Received message without conferenceId/eventId: %s", data)
                     continue
 
-                key = (client_id, event_id)
+                key = (conferenceId, event_id)
 
                 if msg_type == "audio":
                     audio_b64 = data.get("audio")
@@ -78,9 +74,9 @@ class STTService:
 
                     if key not in self.sessions:
                         self.sessions[key] = {
-                            "audio_buffer": AudioBufferManager(self.vad),
+                            "audio_buffer": AudioBufferManager(),
                             "aggregator": TextAggregator(lambda text, meta: self.send_to_backend(text, meta)),
-                            "meta": {"clientId": client_id, "eventId": event_id}
+                            "meta": {"conferenceId": conferenceId, "eventId": event_id}
                         }
 
                     session = self.sessions[key]
@@ -96,7 +92,7 @@ class STTService:
                             await agg.add(text, session["meta"])
 
                 elif msg_type in ("disconnect", "end"):
-                    logger.debug(f"Client {client_id}/{event_id} disconnected -> cleaning up")
+                    logger.debug(f"Client {conferenceId}/{event_id} disconnected -> cleaning up")
                     await self._cleanup_session(key)
 
             except WebSocketDisconnect:
@@ -132,7 +128,7 @@ class STTService:
     async def send_to_backend(self, text: str, metadata: dict):
         payload = {
             "type": "final_text",
-            "clientId": metadata["clientId"],
+            "conferenceId": metadata["conferenceId"],
             "eventId": metadata["eventId"],
             "text": text,
         }

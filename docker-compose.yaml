@@ -1,4 +1,58 @@
 services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    restart: unless-stopped
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD", "echo", "ruok", "|", "nc", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "9101:9101"
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: kafka
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - ./kafka-init.sh:/tmp/kafka-init.sh
+    command: bash /tmp/kafka-init.sh
+    restart: "no"
+
   redis:
     image: redis:7.2.4-alpine
     container_name: redis
@@ -16,33 +70,29 @@ services:
   stt-service:
     build:
       context: ./STT
-      args:
-        MODEL: ${MODEL}
     container_name: stt-service
     restart: unless-stopped
     ports:
       - "8081:8081"
     environment:
-      MODEL: ${MODEL}
       MIN_SEND_S: ${MIN_SEND_S}
       PREFERRED_SEND_S: ${PREFERRED_SEND_S}
-      MAX_SEND_S: ${MAX_SEND_S}
-      SILENCE_AFTER_S: ${SILENCE_AFTER_S}
       CHAR_THRESHOLD: ${CHAR_THRESHOLD}
       TIME_THRESHOLD: ${TIME_THRESHOLD}
       STT_PORT: 8081
 
       # Whisper params
-      THREADS: 4
-      CHUNK_SIZE_S: 10
+      THREADS: 12
       BEAM_SIZE: 1
       COMPUTE_TYPE: int8 # "float16" for GPU or "int8" for CPU
       DEVICE: CPU # "GPU" or "CPU"
+    volumes:
+      - ./STT/models:/app/models
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
       start_period: 10s
 
   spring-backend:
@@ -51,7 +101,7 @@ services:
     container_name: spring-backend
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8443:8443"  # HTTPS и WSS
     volumes:
       - ./audio-dumps:/app/audio-dumps 
     environment:
@@ -60,11 +110,48 @@ services:
       GIGACHAT_AUTH_KEY: ${GIGACHAT_AUTH_KEY}
       STT_URL: ${STT_URL}
       AUDIO_DUMP_ENABLED: true
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_BOT_TASKS_TOPIC: ${BOT_TASKS_TOPIC}
     depends_on:
       redis:
         condition: service_healthy
       stt-service:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:8443/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
+  browser-bot:
+    build:
+      context: ./Browser_bot
+    container_name: browser-bot
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+    deploy:
+      replicas: ${NUMBER_OF_BROWSER_INSTANCES}
+    environment:
+      REDIS_URL: "redis://${REDIS_PORT}:${REDIS_PORT}"
+      REDIS_QUEUE_KEY: "meeting_tasks"
+      BACKEND_REST_URL: "https://spring-backend:8443"
+      AUDIO_WS_URL: "wss://spring-backend:8443/ws/bot"
+      MAX_CONCURRENT_BOTS: ${MAX_CONCURRENT_BOTS_PER_BROWSER}
+      # Kafka
+      TASK_SOURCE_TYPE: "kafka"
+      KAFKA_BROKERS: "kafka:29092"
+      KAFKA_TOPIC: ${BOT_TASKS_TOPIC}
+      KAFKA_GROUP_ID: "browser-bot-group"
+    depends_on:
+      spring-backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 volumes:
   redis_data:

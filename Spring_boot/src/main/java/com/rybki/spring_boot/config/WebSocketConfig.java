@@ -1,12 +1,7 @@
 package com.rybki.spring_boot.config;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.rybki.spring_boot.websocket.ClientWebSocketHandler;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +11,11 @@ import org.springframework.web.reactive.handler.SimpleUrlHandlerMapping;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAdapter;
 
+import com.rybki.spring_boot.websocket.BotWebSocketHandler;
+import com.rybki.spring_boot.websocket.ClientWebSocketHandler;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Configuration
@@ -23,20 +23,22 @@ import org.springframework.web.reactive.socket.server.support.WebSocketHandlerAd
 public class WebSocketConfig {
 
     private final ClientWebSocketHandler clientWebSocketHandler;
+    private final BotWebSocketHandler botWebSocketHandler;
 
     @Bean
     public HandlerMapping webSocketHandlerMapping() {
-        Map<String, WebSocketHandler> map = new HashMap<>();
+        final Map<String, WebSocketHandler> map = new HashMap<>();
         map.put("/ws/client", clientWebSocketHandler);
+        map.put("/event", clientWebSocketHandler);
+        map.put("/ws/bot/**", botWebSocketHandler);
 
-        SimpleUrlHandlerMapping handlerMapping = new SimpleUrlHandlerMapping();
+        final SimpleUrlHandlerMapping handlerMapping = new SimpleUrlHandlerMapping();
         handlerMapping.setOrder(Ordered.HIGHEST_PRECEDENCE);
         handlerMapping.setUrlMap(map);
-        
+
         return handlerMapping;
     }
 
-    // для адаптации нашего WebSocketHandler в WebFlux
     @Bean
     public WebSocketHandlerAdapter handlerAdapter() {
         return new WebSocketHandlerAdapter();

@@ -40,17 +40,31 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+RUN addgroup -g 1000 appgroup && \
+    adduser -u 1000 -G appgroup -h /app -D appuser
+
 # Копируем cacerts с установленными сертификатами из build stage
 COPY --from=build $JAVA_HOME/lib/security/cacerts $JAVA_HOME/lib/security/cacerts
 
 # Копируем собранный JAR
 COPY --from=build /app/build/libs/*.jar ./app.jar
 
+# Копируем keystore.p12 в контейнер
+COPY src/main/resources/keystore.p12 /app/keystore.p12
+
+RUN mkdir -p /app/audio-dumps
+RUN chown -R appuser:appgroup /app
+
+# Добавляем curl для healthcheck
+RUN apk add --no-cache curl
+
 ENV JAVA_OPTS="-XX:+UseContainerSupport \
                -XX:MaxRAMPercentage=75.0 \
                -XX:+UseG1GC \
                -XX:+UseStringDeduplication"
 
-EXPOSE 8080
+EXPOSE 8443
+
+USER appuser
 
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
