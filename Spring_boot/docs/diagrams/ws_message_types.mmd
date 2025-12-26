@@ -1,0 +1,21 @@
+flowchart LR
+  ClientMsgs[[Client inbound]] -->|WS| CWS
+  CWS -->|type: vote| VoteService
+  CWS -->|type: create_idea| IdeaService
+  CWS -->|type: delete_idea| IdeaService
+  CWS -->|type: react_to_idea| IdeaService
+  CWS -->|type: connect_bot| BotService
+  CWS -->|type: disconnect_bot| BotService
+
+  STTMsgs[[STT inbound]] --> STTH
+  STTH -->|type: final_text| IdeaService
+
+  Outbound --> CNOTIF
+  CNOTIF -->|idea| Clients
+  CNOTIF -->|idea_deleted| Clients
+  CNOTIF -->|idea_reaction| Clients
+  CNOTIF -->|idea_status_changed| Clients
+  CNOTIF -->|ideas_list| Clients
+  CNOTIF -->|participants_count| Clients
+  CNOTIF -->|bot_connected| Clients
+  CNOTIF -->|bot_disconnected| Clients

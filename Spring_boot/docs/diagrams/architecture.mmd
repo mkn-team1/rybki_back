@@ -1,0 +1,53 @@
+graph LR
+  subgraph Client
+    UI[Web UI]
+  end
+
+  subgraph Backend[Spring Boot Backend]
+    CWS[ClientWebSocketHandler]
+    BWS[BotWebSocketHandler]
+    SESS[SessionService]
+    CREG[ClientRegistryService]
+    ADUMP[AudioDumpService]
+
+    STTR[SttRoutingService]
+    STTWS[SttWebSocketClient]
+
+    STTH[SttResponseHandler]
+    IDEA_SVC[IdeaService]
+    IEX[IdeaExtractorClient]
+    LRF[LlmRequestFactoryService]
+    LLM[GigaChatLlmClient]
+
+    CNOTIF[ClientNotificationService]
+    REDIS_IDEA[(RedisIdeaRepository)]
+    REDIS_EVENT[(RedisEventRepository)]
+    REDIS_CLIENT[(RedisClientRepository)]
+
+    EC[EventController]
+    ES[EventService]
+
+    BOT_SVC[BotService]
+    KAFKA_SVC[BotKafkaService]
+  end
+
+  UI -->|WS /ws/client| CWS
+  UI -->|REST /events| EC
+
+  CWS --> SESS
+  CWS --> CREG
+  BWS --> SESS
+
+  BWS --> STTR --> STTWS
+  STTWS --> EXT_STT[(External STT)]
+
+  EXT_STT --> STTH
+  STTH --> IDEA_SVC
+  IDEA_SVC --> IEX --> LRF --> LLM
+  IDEA_SVC --> REDIS_IDEA
+  IDEA_SVC --> CNOTIF --> UI
+
+  EC --> ES --> REDIS_EVENT
+  ES --> REDIS_CLIENT
+
+  UI -->|WS connect_bot| CWS --> BOT_SVC --> KAFKA_SVC --> BROKER[(Kafka broker)]

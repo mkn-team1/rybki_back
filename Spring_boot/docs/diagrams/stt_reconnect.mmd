@@ -1,0 +1,8 @@
+flowchart TD
+  STTWS[SttWebSocketClient]
+  STTWS -->|outQueue Sinks.Many| Sender
+  STTWS -->|ReactorNetty client.execute| Connection
+  Connection -->|retryWhen(backoff)| Reconnect
+  Reconnect --> STTWS
+  Connection -->|on receive| STTH[SttResponseHandler]
+  Note[Backoff resets on successful connect]

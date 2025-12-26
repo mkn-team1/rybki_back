@@ -1,0 +1,13 @@
+sequenceDiagram
+  participant IDEA as IdeaExtractorClient
+  participant LRF as LlmRequestFactoryService
+  participant LLM as GigaChatLlmClient
+  participant DTO as GigaChatRequestDto/GigaChatResponseDto
+
+  IDEA->>LRF: createIdeaExtractionRequest(text)
+  LRF-->>IDEA: LlmRequest
+  IDEA->>LLM: sendRequest(LlmRequest)
+  LLM->>DTO: build request + WebClient.post()
+  DTO-->>LLM: response JSON
+  LLM-->>IDEA: LlmResponse (content/model/usage)
+  IDEA-->>IDEA: parse ideas from JSON

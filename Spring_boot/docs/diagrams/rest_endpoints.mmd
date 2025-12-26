@@ -1,0 +1,17 @@
+flowchart TD
+  Client -->|POST /events/create| EC[EventController]
+  EC --> ES[EventService]
+  ES --> REDIS_EVENT
+  ES --> REDIS_CLIENT
+
+  Client -->|POST /events/<eventId>/join| EC
+  EC --> ES
+  ES --> REDIS_EVENT
+  ES --> REDIS_CLIENT
+
+  Client -->|POST /events/<eventId>/end| EC
+  EC --> ES
+  ES --> REDIS_EVENT
+
+  Client -->|GET /events/<eventId>/summary| EC
+  EC --> ES

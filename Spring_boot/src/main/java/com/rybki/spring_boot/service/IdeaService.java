@@ -1,6 +1,7 @@
 package com.rybki.spring_boot.service;
 
-import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -62,7 +63,7 @@ public class IdeaService {
                 .title(idea.title())
                 .description(idea.description())
                 .status(IdeaStatus.LOCAL)
-                .createdAt(Instant.now().toString())
+                .createdAt(OffsetDateTime.now(ZoneId.systemDefault()).toString())
                 .author(safeName)
                 .likes(0)
                 .dislikes(0)
@@ -92,7 +93,7 @@ public class IdeaService {
                 .title(title)
                 .description(description)
                 .status(IdeaStatus.LOCAL)
-                .createdAt(Instant.now().toString())
+                .createdAt(OffsetDateTime.now(ZoneId.systemDefault()).toString())
                 .author(safeName)
                 .likes(0)
                 .dislikes(0)
@@ -180,7 +181,7 @@ public class IdeaService {
                     && idea.getPromotedToGlobalAt() == null;
             
             if (shouldPromoteToGlobal) {
-                idea.setPromotedToGlobalAt(Instant.now().toString());
+                idea.setPromotedToGlobalAt(OffsetDateTime.now(ZoneId.systemDefault()).toString());
                 idea.setStatus(IdeaStatus.GLOBAL);
                 log.info("🚀 [IDEA-SERVICE] Idea promoted to GLOBAL: ideaId={}, likes={}, participants={}", 
                         ideaId, likes, participantsCount);

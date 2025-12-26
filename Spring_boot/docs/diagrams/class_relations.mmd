@@ -1,0 +1,32 @@
+classDiagram
+  class IdeaService {
+    +processText(...)
+    +createIdeaFromFront(...)
+    +reactToIdea(...)
+    +getIdeasForEvent(eventId)
+  }
+  class IdeaExtractorClient {
+    +extractIdeas(text)
+  }
+  class LlmRequestFactoryService
+  class GigaChatLlmClient
+  class ClientNotificationService
+  class RedisIdeaRepository
+  class SessionService
+  class SttResponseHandler
+  class SttRoutingService
+  class SttWebSocketClient
+  class ClientRegistryService
+  class BotService
+  class BotKafkaService
+
+  IdeaService --> IdeaExtractorClient
+  IdeaService --> ClientNotificationService
+  IdeaService --> RedisIdeaRepository
+  IdeaService --> SessionService
+  SttResponseHandler --> IdeaService
+  SttResponseHandler --> ClientRegistryService
+  SttRoutingService --> SttWebSocketClient
+  BotService --> SessionService
+  BotService --> BotKafkaService
+  BotService --> ClientNotificationService

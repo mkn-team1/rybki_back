@@ -1,0 +1,8 @@
+stateDiagram-v2
+  [*] --> LOCAL
+  LOCAL --> GLOBAL: Majority likes (>50% of participants)
+  GLOBAL --> GOLDEN: Accept reaction
+  LOCAL --> GOLDEN: Accept reaction
+  note right of LOCAL: Pending ideas set
+  note right of GLOBAL: Promoted, event-wide broadcasts
+  note right of GOLDEN: Accepted/confirmed

@@ -1,0 +1,33 @@
+sequenceDiagram
+  participant Bot
+  participant BWS as BotWebSocketHandler
+  participant STTR as SttRoutingService
+  participant STTWS as SttWebSocketClient
+  participant STT as External STT
+  participant STTH as SttResponseHandler
+  participant CREG as ClientRegistryService
+  participant IDEA as IdeaService
+  participant IEX as IdeaExtractorClient
+  participant LRF as LlmRequestFactoryService
+  participant LLM as GigaChatLlmClient
+  participant REDIS as RedisIdeaRepository
+  participant NOTIF as ClientNotificationService
+  participant Clients
+
+  Bot->>BWS: PCM16LE frames (binary)
+  BWS->>STTR: forwardAudio(conferenceId,eventId,bytes)
+  STTR->>STTWS: sendToStt({ type: audio, ... })
+  STTWS->>STT: WebSocket send
+  STT-->>STTWS: final_text JSON
+  STTWS-->>STTH: payload
+  STTH->>CREG: getClientInfo(clientId)
+  STTH->>IDEA: processText(confId, confName, eventId, text)
+  IDEA->>IEX: extractIdeas(text)
+  IEX->>LRF: createIdeaExtractionRequest(text)
+  LRF-->>IEX: request
+  IEX->>LLM: sendRequest(request)
+  LLM-->>IEX: response (ideas JSON)
+  IEX-->>IDEA: ideas
+  IDEA->>REDIS: saveIdea(idea)
+  IDEA->>NOTIF: broadcastIdeaToConference(...)
+  NOTIF-->>Clients: WS message { type: "idea" }

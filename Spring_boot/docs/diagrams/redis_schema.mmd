@@ -1,0 +1,18 @@
+flowchart TD
+  subgraph Redis
+    I[idea:<ideaId> Idea]
+    P[event:<eventId>:ideas:pending Set_of_ideaId]
+    A[event:<eventId>:ideas:accepted Set_of_ideaId]
+    R[event:<eventId>:ideas:rejected Set_of_ideaId]
+    E[event:<eventId> Event]
+    EP[event:<eventId>:participants Set_of_conferenceId]
+    CNF[conference:<conferenceId>:name String]
+    CCM[client:<clientId> conferenceId,eventId]
+  end
+
+  I --- P
+  I --- A
+  I --- R
+  E --- EP
+  CNF --> E
+  CCM --> CNF

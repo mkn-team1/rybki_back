@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant Client
+  participant CWS as ClientWebSocketHandler
+  participant REDIS as RedisClientRepository / RedisEventRepository
+  participant CREG as ClientRegistryService
+  participant SESS as SessionService
+  participant NOTIF as ClientNotificationService
+
+  Client->>CWS: WS connect with clientId,eventId
+  CWS->>REDIS: fetch conferenceId, conferenceName
+  CWS->>CREG: registerClient(clientId, conferenceId, eventId, name)
+  CWS->>SESS: registerClient(session, clientId, ...)
+  CWS->>NOTIF: broadcastParticipantsCount(conferenceId, count)
+  Client--xCWS: WS disconnect
+  CWS->>CREG: unregisterClient(clientId)
+  CWS->>SESS: unregisterClient(session)
+  CWS->>NOTIF: broadcastParticipantsCount(conferenceId, count)

@@ -1,0 +1,55 @@
+flowchart LR
+    subgraph Client Side
+        CLIENT[Client Web UI]
+        BOT[Bot WS Client]
+    end
+
+    subgraph Backend WS
+        CWS[ClientWebSocketHandler]
+        BWS[BotWebSocketHandler]
+        SESS[SessionService]
+        CREG[ClientRegistryService]
+        ADUMP[AudioDumpService]
+        STTR[SttRoutingService]
+        STTWS[SttWebSocketClient]
+    end
+
+    subgraph External STT
+        EXT_STT[(STT Provider)]
+    end
+
+    subgraph Idea Processing
+        STTH[SttResponseHandler]
+        IEX[IdeaExtractorClient]
+        LRF[LlmRequestFactoryService]
+        LLM[GigaChatLlmClient]
+        REDIS_IDEA[(RedisIdeaRepository)]
+    end
+
+    subgraph Notifications
+        CNOTIF[ClientNotificationService]
+    end
+
+    CLIENT -- WS connect with clientId,eventId --> CWS
+    CWS --> SESS
+    CWS --> CREG
+
+    BOT -- WS connect with botId --> BWS
+    BWS --> SESS
+
+    BOT -- PCM16LE audio (binary) --> BWS
+    BWS --> STTR
+    BWS --> ADUMP
+    STTR --> STTWS
+    STTWS --> EXT_STT
+
+    EXT_STT -- final_text --> STTH
+    STTH --> IEX
+    IEX --> LRF
+    LRF --> LLM
+    LLM -- response (ideas JSON) --> IEX
+
+    IEX -->|ideas| REDIS_IDEA
+    REDIS_IDEA --> CNOTIF
+    CNOTIF --> CLIENT
+    CNOTIF -->|event-wide broadcast| CLIENT

@@ -1,0 +1,5 @@
+flowchart LR
+  Client -- WS: connect_bot --> CWS
+  CWS --> BOT_SVC[BotService]
+  BOT_SVC --> KAFKA_SVC[BotKafkaService]
+  KAFKA_SVC -->|produce| Broker[(Kafka broker)]

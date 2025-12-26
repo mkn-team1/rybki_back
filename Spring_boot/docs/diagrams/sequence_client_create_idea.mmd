@@ -1,0 +1,14 @@
+sequenceDiagram
+  participant Client
+  participant CWS as ClientWebSocketHandler
+  participant SESS as SessionService
+  participant IDEA as IdeaService
+  participant REDIS as RedisIdeaRepository
+  participant NOTIF as ClientNotificationService
+
+  Client->>CWS: WS { type: create_idea, data }
+  CWS->>SESS: getSessionData(session)
+  CWS->>IDEA: createIdeaFromFront(confId, confName, eventId, title, desc)
+  IDEA->>REDIS: saveIdea(idea)
+  IDEA->>NOTIF: broadcastIdeaToConference(...)
+  NOTIF-->>Client: WS { type: "idea" }

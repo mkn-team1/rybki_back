@@ -1,0 +1,15 @@
+flowchart LR
+    CLIENT[Client] -- WS: create_idea/delete_idea/react_to_idea --> CWS[ClientWebSocketHandler]
+    CWS --> SESS[SessionService]
+    CWS --> IDEA_SVC[IdeaService]
+    IDEA_SVC --> REDIS_IDEA[(RedisIdeaRepository)]
+    IDEA_SVC --> CNOTIF[ClientNotificationService]
+    CNOTIF --> CLIENT
+
+    subgraph Voting/Promotion
+        SESS2[SessionService]
+        IDEA_SVC2[IdeaService]
+    end
+
+    IDEA_SVC2 --> SESS2
+    SESS2 --> IDEA_SVC2

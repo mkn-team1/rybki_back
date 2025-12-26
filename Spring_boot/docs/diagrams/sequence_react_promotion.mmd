@@ -1,0 +1,17 @@
+sequenceDiagram
+  participant Client
+  participant CWS as ClientWebSocketHandler
+  participant SESS as SessionService
+  participant IDEA as IdeaService
+  participant REDIS as RedisIdeaRepository
+  participant NOTIF as ClientNotificationService
+
+  Client->>CWS: WS { type: react_to_idea, ideaId, reaction }
+  CWS->>SESS: getSessionData(session)
+  CWS->>IDEA: reactToIdea(confId, eventId, ideaId, reaction, clientId)
+  IDEA->>REDIS: saveIdea(idea)
+  IDEA->>NOTIF: broadcastIdeaReaction(confId, ideaId, likes, dislikes)
+  alt likes > participants/2 and not promoted
+    IDEA->>REDIS: promote to GLOBAL
+    IDEA->>NOTIF: broadcastIdeaStatusChanged(eventId, confId, ideaId, "global")
+  end
