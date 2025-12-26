@@ -54,24 +54,25 @@ public class IdeaService {
 
     private Mono<Void> createAndSendIdea(String conferenceId, String conferenceName, String eventId, Idea idea) {
         final String safeName = conferenceName != null && !conferenceName.isEmpty() ? conferenceName : "Anonymous";
+        final String createdAt = java.time.ZonedDateTime.now(ZoneId.systemDefault()).toOffsetDateTime().toString();
         final com.rybki.spring_boot.model.domain.redis.Idea redisIdea = com.rybki.spring_boot.model.domain.redis.Idea
-                .builder()
-                .ideaId(UUID.randomUUID().toString())
-                .eventId(eventId)
-                .conferenceId(conferenceId)
-                .conferenceName(safeName)
-                .title(idea.title())
-                .description(idea.description())
-                .status(IdeaStatus.LOCAL)
-                .createdAt(OffsetDateTime.now(ZoneId.systemDefault()).toString())
-                .author(safeName)
-                .likes(0)
-                .dislikes(0)
-                .myReaction(null)
-                .promotedToGlobalAt(null)
-                .promotedToGoldenAt(null)
-                .sourceText("")
-                .build();
+            .builder()
+            .ideaId(UUID.randomUUID().toString())
+            .eventId(eventId)
+            .conferenceId(conferenceId)
+            .conferenceName(safeName)
+            .title(idea.title())
+            .description(idea.description())
+            .status(IdeaStatus.LOCAL)
+            .createdAt(createdAt)
+            .author(safeName)
+            .likes(0)
+            .dislikes(0)
+            .myReaction(null)
+            .promotedToGlobalAt(null)
+            .promotedToGoldenAt(null)
+            .sourceText("")
+            .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(redisIdea))
                 .then(clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, redisIdea))
@@ -84,22 +85,23 @@ public class IdeaService {
         final String safeName = conferenceName != null && !conferenceName.isEmpty() ? conferenceName : "Anonymous";
         log.info("🔍 [IDEA-SERVICE] createIdeaFromFront called: conferenceId={}, conferenceName={}, safeName={}, eventId={}, title={}",
                 conferenceId, conferenceName, safeName, eventId, title);
+        final String createdAt = java.time.ZonedDateTime.now(ZoneId.systemDefault()).toOffsetDateTime().toString();
         final com.rybki.spring_boot.model.domain.redis.Idea idea = com.rybki.spring_boot.model.domain.redis.Idea
-                .builder()
-                .ideaId(UUID.randomUUID().toString())
-                .eventId(eventId)
-                .conferenceId(conferenceId)
-                .conferenceName(safeName)
-                .title(title)
-                .description(description)
-                .status(IdeaStatus.LOCAL)
-                .createdAt(OffsetDateTime.now(ZoneId.systemDefault()).toString())
-                .author(safeName)
-                .likes(0)
-                .dislikes(0)
-                .myReaction(null)
-                .sourceText("")
-                .build();
+            .builder()
+            .ideaId(UUID.randomUUID().toString())
+            .eventId(eventId)
+            .conferenceId(conferenceId)
+            .conferenceName(safeName)
+            .title(title)
+            .description(description)
+            .status(IdeaStatus.LOCAL)
+            .createdAt(createdAt)
+            .author(safeName)
+            .likes(0)
+            .dislikes(0)
+            .myReaction(null)
+            .sourceText("")
+            .build();
 
         return Mono.fromRunnable(() -> ideaRepository.saveIdea(idea))
                 .then(clientNotificationService.broadcastIdeaToConference(conferenceId, eventId, idea))
